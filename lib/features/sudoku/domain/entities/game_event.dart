@@ -57,3 +57,21 @@ class AllNumberFilledEvent extends GameEvent {
 
   AllNumberFilledEvent(this.number);
 }
+
+class RowCompletedEvent extends GameEvent {
+  final int rowIndex;
+  final int triggerCellIndex; // cell where the final number was entered
+  RowCompletedEvent(this.rowIndex, this.triggerCellIndex);
+}
+
+class ColumnCompletedEvent extends GameEvent {
+  final int columnIndex;
+  final int triggerCellIndex;
+  ColumnCompletedEvent(this.columnIndex, this.triggerCellIndex);
+}
+
+class BoxCompletedEvent extends GameEvent {
+  final int boxIndex; // 0..8, left-to-right, top-to-bottom
+  final int triggerCellIndex;
+  BoxCompletedEvent(this.boxIndex, this.triggerCellIndex);
+}

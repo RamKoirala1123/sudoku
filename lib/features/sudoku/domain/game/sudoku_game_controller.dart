@@ -164,6 +164,31 @@ class SudokuGameController extends ChangeNotifier {
         incorrectCells: newIncorrect,
       );
 
+      // Emit row/column/box completion events when this correct move
+      // causes a full row/column/box to match the solution. This lets the
+      // UI animate waves regardless of whether the entry completed all
+      // instances of the same number.
+      final row = selected ~/ AppConstants.boardSize;
+      final col = selected % AppConstants.boardSize;
+
+      if (_isRowCompleted(row, newBoard, solution)) {
+        debugPrint('RowCompletedEvent emitted for row=$row trigger=$selected');
+        _emitEvent(RowCompletedEvent(row, selected));
+      }
+
+      if (_isColumnCompleted(col, newBoard, solution)) {
+        debugPrint(
+            'ColumnCompletedEvent emitted for col=$col trigger=$selected');
+        _emitEvent(ColumnCompletedEvent(col, selected));
+      }
+
+      final box = (row ~/ AppConstants.boxSize) * AppConstants.boxSize +
+          (col ~/ AppConstants.boxSize);
+      if (_isBoxCompleted(box, newBoard, solution)) {
+        debugPrint('BoxCompletedEvent emitted for box=$box trigger=$selected');
+        _emitEvent(BoxCompletedEvent(box, selected));
+      }
+
       // Check completion BEFORE normal success sound.
       //
       // This prevents the final number from playing both:
@@ -243,6 +268,39 @@ class SudokuGameController extends ChangeNotifier {
     }
 
     _emitState();
+  }
+
+  bool _isRowCompleted(int row, List<int> board, List<int> solution) {
+    final start = row * AppConstants.boardSize;
+    for (int i = 0; i < AppConstants.boardSize; i++) {
+      if (board[start + i] != solution[start + i]) return false;
+    }
+    return true;
+  }
+
+  bool _isColumnCompleted(int col, List<int> board, List<int> solution) {
+    for (int r = 0; r < AppConstants.boardSize; r++) {
+      final idx = r * AppConstants.boardSize + col;
+      if (board[idx] != solution[idx]) return false;
+    }
+    return true;
+  }
+
+  bool _isBoxCompleted(int boxIndex, List<int> board, List<int> solution) {
+    final boxRow = boxIndex ~/ AppConstants.boxSize;
+    final boxCol = boxIndex % AppConstants.boxSize;
+
+    final startRow = boxRow * AppConstants.boxSize;
+    final startCol = boxCol * AppConstants.boxSize;
+
+    for (int r = 0; r < AppConstants.boxSize; r++) {
+      for (int c = 0; c < AppConstants.boxSize; c++) {
+        final idx = (startRow + r) * AppConstants.boardSize + (startCol + c);
+        if (board[idx] != solution[idx]) return false;
+      }
+    }
+
+    return true;
   }
 
   void erase() {

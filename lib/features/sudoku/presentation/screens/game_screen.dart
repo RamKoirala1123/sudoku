@@ -184,6 +184,7 @@ class _GameScreenState extends State<GameScreen> {
                               SudokuBoardWidget(
                                 state: state,
                                 onCellTap: _controller.selectCell,
+                                events: _controller.events,
                               ),
                               const SizedBox(height: 20),
                               NumberPadWidget(
