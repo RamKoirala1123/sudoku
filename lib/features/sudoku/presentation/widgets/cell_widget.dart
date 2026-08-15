@@ -10,6 +10,7 @@ class CellVisualState {
   final bool isRelated; // same row/col/box as selection
   final bool isSameValue; // shares selected cell's value
   final bool isIncorrect;
+  final Set<int> candidates;
 
   const CellVisualState({
     required this.value,
@@ -18,6 +19,7 @@ class CellVisualState {
     required this.isRelated,
     required this.isSameValue,
     required this.isIncorrect,
+    this.candidates = const {},
   });
 }
 
@@ -68,8 +70,38 @@ class CellWidget extends StatelessWidget {
         color: _backgroundColor,
         alignment: Alignment.center,
         child: state.value == 0
-            ? const SizedBox.shrink(
-                key: ValueKey('empty'),
+            ? Padding(
+                padding: const EdgeInsets.all(4.0),
+                child: LayoutBuilder(builder: (context, constraints) {
+                  final txtStyle =
+                      Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: palette.playerText.withOpacity(0.9),
+                            fontSize: 10,
+                          );
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(3, (r) {
+                      return Expanded(
+                        child: Row(
+                          children: List.generate(3, (c) {
+                            final number = r * 3 + c + 1;
+                            final show = state.candidates.contains(number);
+                            return Expanded(
+                              child: Center(
+                                child: show
+                                    ? Text(
+                                        '$number',
+                                        style: txtStyle,
+                                      )
+                                    : const SizedBox.shrink(),
+                              ),
+                            );
+                          }),
+                        ),
+                      );
+                    }),
+                  );
+                }),
               )
             : Stack(
                 alignment: Alignment.center,

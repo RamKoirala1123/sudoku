@@ -23,6 +23,10 @@ class SudokuGameState {
 
   final int? selectedCell;
 
+  /// Pencil/candidate marks placed by the player. Maps cell index -> set of
+  /// candidate numbers (1-9). Empty or absent entries mean no candidates.
+  final Map<int, Set<int>> candidates;
+
   /// Cells the player has entered that are currently wrong (relative to the
   /// solution), tracked so the UI can flash/highlight them when
   /// "Show Mistakes" is enabled.
@@ -40,6 +44,7 @@ class SudokuGameState {
     required this.elapsedSeconds,
     required this.selectedCell,
     required this.incorrectCells,
+    required this.candidates,
   });
 
   factory SudokuGameState.initial(Difficulty difficulty) => SudokuGameState(
@@ -54,6 +59,7 @@ class SudokuGameState {
         elapsedSeconds: 0,
         selectedCell: null,
         incorrectCells: const {},
+        candidates: const <int, Set<int>>{},
       );
 
   bool get isGameActive => status == GameStatus.playing;
@@ -74,6 +80,7 @@ class SudokuGameState {
     int? selectedCell,
     bool clearSelectedCell = false,
     Set<int>? incorrectCells,
+    Map<int, Set<int>>? candidates,
   }) {
     return SudokuGameState(
       puzzle: puzzle ?? this.puzzle,
@@ -85,8 +92,10 @@ class SudokuGameState {
       wrongCount: wrongCount ?? this.wrongCount,
       lives: lives ?? this.lives,
       elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
-      selectedCell: clearSelectedCell ? null : (selectedCell ?? this.selectedCell),
+      selectedCell:
+          clearSelectedCell ? null : (selectedCell ?? this.selectedCell),
       incorrectCells: incorrectCells ?? this.incorrectCells,
+      candidates: candidates ?? this.candidates,
     );
   }
 }

@@ -33,6 +33,7 @@ class SudokuGameController extends ChangeNotifier {
   bool _showMistakes;
 
   final _eventsController = StreamController<GameEvent>.broadcast();
+  final List<_MoveRecord> _moveHistory = [];
 
   Stream<GameEvent> get events => _eventsController.stream;
 
@@ -129,6 +130,10 @@ class SudokuGameController extends ChangeNotifier {
     final newBoard = List<int>.from(_state.board);
     newBoard[selected] = value;
 
+    // when a number is placed, clear any pencil marks for that cell
+    final newCandidates = Map<int, Set<int>>.from(_state.candidates);
+    newCandidates.remove(selected);
+
     final newIncorrect = Set<int>.from(
       _state.incorrectCells,
     );
@@ -144,6 +149,16 @@ class SudokuGameController extends ChangeNotifier {
       value: value,
       wasCorrect: isCorrect,
     );
+
+    // record move history for undo
+    final prevValue = _state.board[selected];
+    _moveHistory.add(_MoveRecord(
+      cellIndex: selected,
+      previousValue: prevValue,
+      newValue: value,
+      wasCorrect: isCorrect,
+      isErase: false,
+    ));
 
     _emitEvent(
       NumberEnteredEvent(move),
@@ -162,6 +177,7 @@ class SudokuGameController extends ChangeNotifier {
         score: newScore,
         correctCount: newCorrect,
         incorrectCells: newIncorrect,
+        candidates: newCandidates,
       );
 
       // Emit row/column/box completion events when this correct move
@@ -249,6 +265,7 @@ class SudokuGameController extends ChangeNotifier {
         wrongCount: newWrong,
         lives: newLives,
         incorrectCells: newIncorrect,
+        candidates: newCandidates,
       );
 
       // Play error sound.
@@ -318,15 +335,165 @@ class SudokuGameController extends ChangeNotifier {
       return;
     }
 
+    final prevValue = _state.board[selected];
     final newBoard = List<int>.from(_state.board)..[selected] = 0;
 
     final newIncorrect = Set<int>.from(
       _state.incorrectCells,
     )..remove(selected);
 
+    // preserve candidates for other cells; do not re-add candidates for the
+    // cleared cell (it'll be empty).
+    final newCandidates = Map<int, Set<int>>.from(_state.candidates);
+    newCandidates.remove(selected);
+
     _state = _state.copyWith(
       board: newBoard,
       incorrectCells: newIncorrect,
+      candidates: newCandidates,
+    );
+
+    // record erase (store previous value so undo can restore it)
+    _moveHistory.add(_MoveRecord(
+      cellIndex: selected,
+      previousValue: prevValue,
+      newValue: 0,
+      wasCorrect: prevValue == _state.puzzle?.solution[selected],
+      isErase: true,
+    ));
+
+    _emitState();
+  }
+
+  /// Toggle a pencil/candidate mark for the currently selected cell.
+  void toggleCandidate(int value) {
+    if (_state.status != GameStatus.playing) return;
+    final selected = _state.selectedCell;
+    if (selected == null) return;
+    if (_state.isGivenCell(selected)) return;
+    if (value < 1 || value > 9) return;
+
+    final newCandidates = Map<int, Set<int>>.from(_state.candidates);
+    final set = Set<int>.from(newCandidates[selected] ?? <int>{});
+    if (set.contains(value)) {
+      set.remove(value);
+    } else {
+      set.add(value);
+    }
+
+    if (set.isEmpty) {
+      newCandidates.remove(selected);
+    } else {
+      newCandidates[selected] = set;
+    }
+
+    _state = _state.copyWith(candidates: newCandidates);
+    _emitState();
+  }
+
+  /// Undo the most recent player move (number entry or erase).
+  void undo() {
+    if (_state.status != GameStatus.playing) return;
+    if (_moveHistory.isEmpty) return;
+
+    final last = _moveHistory.removeLast();
+
+    final idx = last.cellIndex;
+    final restored = last.previousValue;
+
+    final newBoard = List<int>.from(_state.board);
+    newBoard[idx] = restored;
+
+    // recompute incorrect set
+    final solution = _state.puzzle!.solution;
+    final newIncorrect = <int>{};
+    int newCorrectCount = 0;
+    int newWrongCount = 0;
+    for (int i = 0; i < newBoard.length; i++) {
+      if (newBoard[i] != 0 &&
+          newBoard[i] == solution[i] &&
+          !_state.isGivenCell(i)) {
+        newCorrectCount++;
+      }
+      if (newBoard[i] != 0 && newBoard[i] != solution[i]) {
+        newWrongCount++;
+        newIncorrect.add(i);
+      }
+    }
+
+    var newScore = _state.score;
+    // adjust score based on the undone move
+    if (last.wasCorrect) {
+      newScore = math.max(
+          AppConstants.minScore, newScore - AppConstants.correctAnswerPoints);
+    } else if (!last.wasCorrect && !last.isErase) {
+      newScore =
+          math.min(newScore + AppConstants.incorrectAnswerPenalty, 999999);
+    } else if (!last.wasCorrect && last.isErase) {
+      // if undoing an erase that removed an incorrect value, restore penalty reversal
+      newScore =
+          math.min(newScore + AppConstants.incorrectAnswerPenalty, 999999);
+    }
+
+    var newLives = _state.lives;
+    if (!last.wasCorrect) {
+      // if the undone move was incorrect and had reduced lives, restore one life
+      newLives = _state.lives + 1;
+    }
+
+    _state = _state.copyWith(
+      board: newBoard,
+      incorrectCells: newIncorrect,
+      correctCount:
+          newCorrectCount, // note: copyWith doesn't accept correctCount directly
+    );
+
+    // Because SudokuGameState doesn't have direct slots for correctCount/wrongCount,
+    // update score and lives via copyWith
+    _state = _state.copyWith(
+      board: newBoard,
+      incorrectCells: newIncorrect,
+      // reuse fields
+      status: _state.status,
+      score: newScore,
+      wrongCount: newWrongCount,
+      lives: newLives,
+    );
+
+    _emitState();
+  }
+
+  /// Clears all player-filled cells (leaves givens intact).
+  void clearAllPlayerEntries() {
+    if (_state.status != GameStatus.playing) return;
+
+    final puzzle = _state.puzzle;
+    if (puzzle == null) return;
+
+    final newBoard = List<int>.from(puzzle.givens);
+
+    // recompute counts
+    final solution = puzzle.solution;
+    int newCorrectCount = 0;
+    for (int i = 0; i < newBoard.length; i++) {
+      if (newBoard[i] != 0 &&
+          newBoard[i] == solution[i] &&
+          !puzzle.isGivenCell(i)) {
+        newCorrectCount++;
+      }
+    }
+
+    final newScore = newCorrectCount * AppConstants.correctAnswerPoints;
+
+    _moveHistory.clear();
+
+    _state = _state.copyWith(
+      board: newBoard,
+      incorrectCells: {},
+      score: newScore,
+      wrongCount: 0,
+      lives: 3,
+      correctCount: newCorrectCount,
     );
 
     _emitState();
@@ -466,4 +633,20 @@ class SudokuGameController extends ChangeNotifier {
 
     super.dispose();
   }
+}
+
+class _MoveRecord {
+  final int cellIndex;
+  final int previousValue;
+  final int newValue;
+  final bool wasCorrect;
+  final bool isErase;
+
+  _MoveRecord({
+    required this.cellIndex,
+    required this.previousValue,
+    required this.newValue,
+    required this.wasCorrect,
+    required this.isErase,
+  });
 }

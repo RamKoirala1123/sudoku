@@ -282,6 +282,7 @@ class _SudokuBoardWidgetState extends State<SudokuBoardWidget>
                     isRelated: isRelated,
                     isSameValue: isSameValue,
                     isIncorrect: widget.state.incorrectCells.contains(index),
+                    candidates: widget.state.candidates[index] ?? {},
                   ),
                   highlightAnimation: _cellWaveAnimations[index],
                   highlightDirection: _cellHighlightOffsets[index],

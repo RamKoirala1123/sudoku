@@ -79,15 +79,15 @@ class NumberPadWidget extends StatelessWidget {
             );
           }),
         ),
-        const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: enabled ? onErase : null,
-            icon: const Icon(Icons.backspace_outlined, size: 18),
-            label: const Text('Erase'),
-          ),
-        ),
+        // const SizedBox(height: 10),
+        // SizedBox(
+        //   width: double.infinity,
+        //   child: OutlinedButton.icon(
+        //     onPressed: enabled ? onErase : null,
+        //     icon: const Icon(Icons.backspace_outlined, size: 18),
+        //     label: const Text('Erase'),
+        //   ),
+        // ),
       ],
     );
   }

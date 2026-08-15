@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:sudoku_duel/features/sudoku/presentation/widgets/icon_label_button.dart';
 
 import '../../../settings/presentation/settings_controller.dart';
 import '../../../statistics/presentation/statistics_controller.dart';
@@ -25,6 +26,7 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen> {
   late final SudokuGameController _controller;
+  bool _pencilMode = false;
   int? _lastDelta;
   Object _deltaToken = Object();
   int _previousScore = 0;
@@ -134,7 +136,7 @@ class _GameScreenState extends State<GameScreen> {
                       children: [
                         Padding(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 12),
+                              horizontal: 14, vertical: 12),
                           child: Column(
                             children: [
                               Row(
@@ -165,7 +167,7 @@ class _GameScreenState extends State<GameScreen> {
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 24),
                               Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
@@ -181,16 +183,67 @@ class _GameScreenState extends State<GameScreen> {
                                 ],
                               ),
                               const SizedBox(height: 18),
-                              SudokuBoardWidget(
-                                state: state,
-                                onCellTap: _controller.selectCell,
-                                events: _controller.events,
+                              Center(
+                                child: SudokuBoardWidget(
+                                  state: state,
+                                  onCellTap: _controller.selectCell,
+                                  events: _controller.events,
+                                ),
                               ),
-                              const SizedBox(height: 20),
+                              const SizedBox(height: 12),
+                              // Row of utility buttons above the number pad: Undo, Pencil, Erase
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  // Undo
+                                  IconLabelButton(
+                                    icon: const Icon(Icons.undo_rounded),
+                                    label: 'Undo',
+                                    tooltip: 'Undo',
+                                    onPressed:
+                                        state.status == GameStatus.playing
+                                            ? _controller.undo
+                                            : null,
+                                  ),
+
+                                  // Pencil / candidates toggle
+                                  IconLabelButton(
+                                    icon: Icon(
+                                      _pencilMode
+                                          ? Icons.edit_note
+                                          : Icons.edit,
+                                    ),
+                                    label: 'Pencil',
+                                    tooltip: 'Pencil',
+                                    onPressed: () {
+                                      setState(() {
+                                        _pencilMode = !_pencilMode;
+                                      });
+                                    },
+                                  ),
+
+                                  // Erase
+                                  IconLabelButton(
+                                    icon: const Icon(
+                                        Icons.auto_fix_normal_outlined),
+                                    label: 'Erase',
+                                    tooltip: 'Erase',
+                                    onPressed: _controller.erase,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
                               NumberPadWidget(
                                 enabled: state.status == GameStatus.playing,
                                 remainingCounts: _remainingCounts(state.board),
-                                onNumberTap: _controller.inputNumber,
+                                onNumberTap: (value) {
+                                  if (_pencilMode) {
+                                    _controller.toggleCandidate(value);
+                                  } else {
+                                    _controller.inputNumber(value);
+                                  }
+                                },
                                 onErase: _controller.erase,
                               ),
                             ],
