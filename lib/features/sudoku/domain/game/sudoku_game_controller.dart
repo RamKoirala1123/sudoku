@@ -117,6 +117,10 @@ class SudokuGameController extends ChangeNotifier {
     if (selected == null) return;
     if (_state.isGivenCell(selected)) return;
     if (value < 1 || value > 9) return;
+    // Only allow entering a number into an empty cell. If the cell already
+    // contains a player-filled value (correct or incorrect), require the
+    // player to erase it first.
+    if (_state.board[selected] != 0) return;
 
     final solution = _state.puzzle!.solution;
 
@@ -248,6 +252,13 @@ class SudokuGameController extends ChangeNotifier {
 
     if (selected == null) return;
     if (_state.isGivenCell(selected)) return;
+
+    // Don't allow erasing a cell that already contains the correct
+    // solution value. Players must not remove correctly filled cells.
+    if (_state.puzzle != null &&
+        _state.board[selected] == _state.puzzle!.solution[selected]) {
+      return;
+    }
 
     final newBoard = List<int>.from(_state.board)..[selected] = 0;
 

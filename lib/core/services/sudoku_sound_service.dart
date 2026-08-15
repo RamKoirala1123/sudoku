@@ -5,13 +5,13 @@ class SudokuSoundService {
 
   Future<void> playCellError() async {
     await _player.play(
-      AssetSource('sounds/cell_error.mp3'),
+      AssetSource('sounds/error_cell.mp3'),
     );
   }
 
   Future<void> playCellSuccess() async {
     await _player.play(
-      AssetSource('sounds/cell_success.mp3'),
+      AssetSource('sounds/success_cell.mp3'),
     );
   }
 
