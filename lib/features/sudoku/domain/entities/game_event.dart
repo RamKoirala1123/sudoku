@@ -51,3 +51,9 @@ class GameLostEvent extends GameEvent {
   final int elapsedSeconds;
   GameLostEvent({required this.finalScore, required this.elapsedSeconds});
 }
+
+class AllNumberFilledEvent extends GameEvent {
+  final int number;
+
+  AllNumberFilledEvent(this.number);
+}

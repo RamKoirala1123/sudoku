@@ -26,18 +26,26 @@ class CellWidget extends StatelessWidget {
   final VoidCallback onTap;
   final BoardPalette palette;
 
+  /// Used only when the board is initially loading the puzzle.
+  /// The animation affects only the number, not the cell/background/border.
+  final Animation<double>? initialNumberAnimation;
+
   const CellWidget({
     super.key,
     required this.state,
     required this.onTap,
     required this.palette,
+    this.initialNumberAnimation,
   });
 
   Color get _backgroundColor {
     if (state.isSelected) return palette.selectedCell;
     if (state.isIncorrect) return palette.errorCell;
-    if (state.isSameValue && state.value != 0) return palette.sameNumberCell;
+    if (state.isSameValue && state.value != 0) {
+      return palette.sameNumberCell;
+    }
     if (state.isRelated) return palette.relatedCell;
+
     return Colors.transparent;
   }
 
@@ -55,15 +63,16 @@ class CellWidget extends StatelessWidget {
       child: Container(
         color: _backgroundColor,
         alignment: Alignment.center,
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 140),
-          transitionBuilder: (child, animation) =>
-              ScaleTransition(scale: animation, child: child),
-          child: state.value == 0
-              ? const SizedBox.shrink(key: ValueKey('empty'))
-              : Text(
+        child: state.value == 0
+            ? const SizedBox.shrink(
+                key: ValueKey('empty'),
+              )
+            : _buildNumber(
+                Text(
                   '${state.value}',
-                  key: ValueKey('${state.value}-${state.isIncorrect}'),
+                  key: ValueKey(
+                    '${state.value}-${state.isIncorrect}',
+                  ),
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight:
@@ -71,8 +80,45 @@ class CellWidget extends StatelessWidget {
                     color: textColor,
                   ),
                 ),
-        ),
+              ),
       ),
+    );
+  }
+
+  Widget _buildNumber(Widget number) {
+    final animation = initialNumberAnimation;
+
+    // Normal gameplay:
+    // Keep the existing AnimatedSwitcher animation.
+    if (animation == null) {
+      return AnimatedSwitcher(
+        duration: const Duration(milliseconds: 140),
+        transitionBuilder: (child, animation) {
+          return ScaleTransition(
+            scale: animation,
+            child: child,
+          );
+        },
+        child: number,
+      );
+    }
+
+    // Initial puzzle animation:
+    // Animate ONLY the number.
+    return AnimatedBuilder(
+      animation: animation,
+      child: number,
+      builder: (context, child) {
+        final value = animation.value.clamp(0.0, 1.0);
+
+        return Opacity(
+          opacity: value,
+          child: Transform.scale(
+            scale: value,
+            child: child,
+          ),
+        );
+      },
     );
   }
 }

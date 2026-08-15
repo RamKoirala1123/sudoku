@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
+import 'package:sudoku_duel/core/services/sudoku_sound_service.dart';
 
 import '../../../../core/constants/app_constants.dart';
 import '../engine/sudoku_generator.dart';
-import '../engine/sudoku_solver.dart';
 import '../entities/difficulty.dart';
 import '../entities/game_event.dart';
 import '../entities/game_status.dart';
@@ -25,11 +26,14 @@ import 'sudoku_game_state.dart';
 /// but which is exactly the seam a future multiplayer `GameConnection`
 /// would tap into to mirror moves to a remote opponent (spec section 19).
 class SudokuGameController extends ChangeNotifier {
+  final SudokuSoundService _soundService = SudokuSoundService();
+
   SudokuGameState _state;
   Timer? _ticker;
   bool _showMistakes;
 
   final _eventsController = StreamController<GameEvent>.broadcast();
+
   Stream<GameEvent> get events => _eventsController.stream;
 
   /// Invoked exactly once when a game reaches won/lost, so the presentation
@@ -37,8 +41,10 @@ class SudokuGameController extends ChangeNotifier {
   /// needing to know that feature exists.
   void Function(GameSummary summary)? onGameEnded;
 
-  SudokuGameController({required Difficulty difficulty, bool showMistakes = true})
-      : _state = SudokuGameState.initial(difficulty),
+  SudokuGameController({
+    required Difficulty difficulty,
+    bool showMistakes = true,
+  })  : _state = SudokuGameState.initial(difficulty),
         _showMistakes = showMistakes;
 
   SudokuGameState get state => _state;
@@ -50,18 +56,23 @@ class SudokuGameController extends ChangeNotifier {
   void _emitState() => notifyListeners();
 
   void _emitEvent(GameEvent event) {
-    if (!_eventsController.isClosed) _eventsController.add(event);
+    if (!_eventsController.isClosed) {
+      _eventsController.add(event);
+    }
   }
 
   /// Generates a fresh puzzle for [difficulty] (or the controller's current
   /// difficulty) off the UI thread and starts the game.
   Future<void> startNewGame({Difficulty? difficulty}) async {
     _ticker?.cancel();
+
     final targetDifficulty = difficulty ?? _state.difficulty;
 
     final puzzle = await compute(
       SudokuGenerator.generate,
-      GenerationRequest(difficulty: targetDifficulty),
+      GenerationRequest(
+        difficulty: targetDifficulty,
+      ),
     );
 
     _state = SudokuGameState.initial(targetDifficulty).copyWith(
@@ -69,17 +80,30 @@ class SudokuGameController extends ChangeNotifier {
       board: List<int>.from(puzzle.givens),
       status: GameStatus.playing,
     );
+
     _emitState();
     _emitEvent(GameStartedEvent());
+
     _startTicker();
   }
 
-  Future<void> restart() => startNewGame(difficulty: _state.difficulty);
+  Future<void> restart() {
+    return startNewGame(
+      difficulty: _state.difficulty,
+    );
+  }
 
   void selectCell(int index) {
     if (_state.status != GameStatus.playing) return;
-    if (index < 0 || index >= AppConstants.totalCells) return;
-    _state = _state.copyWith(selectedCell: index);
+
+    if (index < 0 || index >= AppConstants.totalCells) {
+      return;
+    }
+
+    _state = _state.copyWith(
+      selectedCell: index,
+    );
+
     _emitState();
     _emitEvent(CellSelectedEvent(index));
   }
@@ -87,49 +111,109 @@ class SudokuGameController extends ChangeNotifier {
   /// Enters [value] (1-9) into the currently selected cell, if legal.
   void inputNumber(int value) {
     if (_state.status != GameStatus.playing) return;
+
     final selected = _state.selectedCell;
+
     if (selected == null) return;
-    if (_state.isGivenCell(selected)) return; // cannot edit given cells
+    if (_state.isGivenCell(selected)) return;
     if (value < 1 || value > 9) return;
 
     final solution = _state.puzzle!.solution;
+
     final isCorrect = solution[selected] == value;
 
     final newBoard = List<int>.from(_state.board);
     newBoard[selected] = value;
 
-    final newIncorrect = Set<int>.from(_state.incorrectCells);
+    final newIncorrect = Set<int>.from(
+      _state.incorrectCells,
+    );
+
     if (isCorrect) {
       newIncorrect.remove(selected);
     } else if (_showMistakes) {
       newIncorrect.add(selected);
     }
 
-    final move = SudokuMove(cellIndex: selected, value: value, wasCorrect: isCorrect);
-    _emitEvent(NumberEnteredEvent(move));
+    final move = SudokuMove(
+      cellIndex: selected,
+      value: value,
+      wasCorrect: isCorrect,
+    );
 
+    _emitEvent(
+      NumberEnteredEvent(move),
+    );
+
+    // ----------------------------------------------------------
+    // CORRECT NUMBER
+    // ----------------------------------------------------------
     if (isCorrect) {
       final newScore = _state.score + AppConstants.correctAnswerPoints;
+
       final newCorrect = _state.correctCount + 1;
+
       _state = _state.copyWith(
         board: newBoard,
         score: newScore,
         correctCount: newCorrect,
         incorrectCells: newIncorrect,
       );
-      _emitEvent(MoveCorrectEvent(move));
 
+      // Check completion BEFORE normal success sound.
+      //
+      // This prevents the final number from playing both:
+      // success.mp3
+      // and completion.mp3
       if (_isBoardSolved(newBoard, solution)) {
+        _soundService.playCompletion();
+
+        _emitEvent(
+          MoveCorrectEvent(move),
+        );
+
         _finishGame(won: true);
         return;
       }
-    } else {
+
+      // Check whether all instances of this number have been filled.
+      //
+      // Example:
+      // If the player just placed the final 7 required by
+      // the solution, play the special "all 7s filled" sound.
+      if (_isNumberCompleted(
+        newBoard,
+        solution,
+        value,
+      )) {
+        _soundService.playAllNumberFilled();
+
+        _emitEvent(
+          AllNumberFilledEvent(value),
+        );
+      } else {
+        // Normal correct number.
+        _soundService.playCellSuccess();
+
+        _emitEvent(
+          MoveCorrectEvent(move),
+        );
+      }
+    }
+
+    // ----------------------------------------------------------
+    // INCORRECT NUMBER
+    // ----------------------------------------------------------
+    else {
       final newScore = math.max(
         AppConstants.minScore,
         _state.score - AppConstants.incorrectAnswerPenalty,
       );
+
       final newWrong = _state.wrongCount + 1;
+
       final newLives = _state.lives - 1;
+
       _state = _state.copyWith(
         board: newBoard,
         score: newScore,
@@ -137,7 +221,16 @@ class SudokuGameController extends ChangeNotifier {
         lives: newLives,
         incorrectCells: newIncorrect,
       );
-      _emitEvent(MoveIncorrectEvent(move, newLives));
+
+      // Play error sound.
+      _soundService.playCellError();
+
+      _emitEvent(
+        MoveIncorrectEvent(
+          move,
+          newLives,
+        ),
+      );
 
       if (newLives <= 0) {
         _finishGame(won: false);
@@ -150,29 +243,49 @@ class SudokuGameController extends ChangeNotifier {
 
   void erase() {
     if (_state.status != GameStatus.playing) return;
+
     final selected = _state.selectedCell;
+
     if (selected == null) return;
     if (_state.isGivenCell(selected)) return;
 
     final newBoard = List<int>.from(_state.board)..[selected] = 0;
-    final newIncorrect = Set<int>.from(_state.incorrectCells)..remove(selected);
-    _state = _state.copyWith(board: newBoard, incorrectCells: newIncorrect);
+
+    final newIncorrect = Set<int>.from(
+      _state.incorrectCells,
+    )..remove(selected);
+
+    _state = _state.copyWith(
+      board: newBoard,
+      incorrectCells: newIncorrect,
+    );
+
     _emitState();
   }
 
   void pause() {
     if (_state.status != GameStatus.playing) return;
+
     _ticker?.cancel();
-    _state = _state.copyWith(status: GameStatus.paused);
+
+    _state = _state.copyWith(
+      status: GameStatus.paused,
+    );
+
     _emitState();
     _emitEvent(GamePausedEvent());
   }
 
   void resume() {
     if (_state.status != GameStatus.paused) return;
-    _state = _state.copyWith(status: GameStatus.playing);
+
+    _state = _state.copyWith(
+      status: GameStatus.playing,
+    );
+
     _emitState();
     _emitEvent(GameResumedEvent());
+
     _startTicker();
   }
 
@@ -184,23 +297,66 @@ class SudokuGameController extends ChangeNotifier {
 
   void _startTicker() {
     _ticker?.cancel();
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_state.status != GameStatus.playing) return;
-      _state = _state.copyWith(elapsedSeconds: _state.elapsedSeconds + 1);
-      _emitState();
-    });
+
+    _ticker = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) {
+        if (_state.status != GameStatus.playing) {
+          return;
+        }
+
+        _state = _state.copyWith(
+          elapsedSeconds: _state.elapsedSeconds + 1,
+        );
+
+        _emitState();
+      },
+    );
   }
 
-  bool _isBoardSolved(List<int> board, List<int> solution) {
+  bool _isBoardSolved(
+    List<int> board,
+    List<int> solution,
+  ) {
     for (int i = 0; i < board.length; i++) {
-      if (board[i] != solution[i]) return false;
+      if (board[i] != solution[i]) {
+        return false;
+      }
     }
+
     return true;
   }
 
-  void _finishGame({required bool won}) {
+  /// Returns true when every cell that should contain [value]
+  /// according to the solution has already been filled correctly.
+  ///
+  /// Example:
+  ///
+  /// If the solution contains nine 7s, this returns true only
+  /// after all nine 7 cells contain 7.
+  bool _isNumberCompleted(
+    List<int> board,
+    List<int> solution,
+    int value,
+  ) {
+    for (int i = 0; i < board.length; i++) {
+      if (solution[i] == value && board[i] != value) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  void _finishGame({
+    required bool won,
+  }) {
     _ticker?.cancel();
-    _state = _state.copyWith(status: won ? GameStatus.won : GameStatus.lost);
+
+    _state = _state.copyWith(
+      status: won ? GameStatus.won : GameStatus.lost,
+    );
+
     _emitState();
 
     final summary = GameSummary(
@@ -213,9 +369,19 @@ class SudokuGameController extends ChangeNotifier {
     );
 
     if (won) {
-      _emitEvent(GameCompletedEvent(finalScore: _state.score, elapsedSeconds: _state.elapsedSeconds));
+      _emitEvent(
+        GameCompletedEvent(
+          finalScore: _state.score,
+          elapsedSeconds: _state.elapsedSeconds,
+        ),
+      );
     } else {
-      _emitEvent(GameLostEvent(finalScore: _state.score, elapsedSeconds: _state.elapsedSeconds));
+      _emitEvent(
+        GameLostEvent(
+          finalScore: _state.score,
+          elapsedSeconds: _state.elapsedSeconds,
+        ),
+      );
     }
 
     onGameEnded?.call(summary);
@@ -224,7 +390,11 @@ class SudokuGameController extends ChangeNotifier {
   @override
   void dispose() {
     _ticker?.cancel();
+
     _eventsController.close();
+
+    _soundService.dispose();
+
     super.dispose();
   }
 }
