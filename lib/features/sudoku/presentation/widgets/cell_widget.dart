@@ -34,8 +34,8 @@ class CellWidget extends StatelessWidget {
   });
 
   Color get _backgroundColor {
-    if (state.isIncorrect) return palette.errorCell;
     if (state.isSelected) return palette.selectedCell;
+    if (state.isIncorrect) return palette.errorCell;
     if (state.isSameValue && state.value != 0) return palette.sameNumberCell;
     if (state.isRelated) return palette.relatedCell;
     return Colors.transparent;
@@ -52,14 +52,13 @@ class CellWidget extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOut,
+      child: Container(
         color: _backgroundColor,
         alignment: Alignment.center,
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 140),
-          transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+          transitionBuilder: (child, animation) =>
+              ScaleTransition(scale: animation, child: child),
           child: state.value == 0
               ? const SizedBox.shrink(key: ValueKey('empty'))
               : Text(
@@ -67,7 +66,8 @@ class CellWidget extends StatelessWidget {
                   key: ValueKey('${state.value}-${state.isIncorrect}'),
                   style: TextStyle(
                     fontSize: 20,
-                    fontWeight: state.isGiven ? FontWeight.w700 : FontWeight.w600,
+                    fontWeight:
+                        state.isGiven ? FontWeight.w700 : FontWeight.w600,
                     color: textColor,
                   ),
                 ),

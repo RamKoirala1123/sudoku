@@ -37,83 +37,74 @@ class SudokuBoardWidget extends StatelessWidget {
           ],
         ),
         clipBehavior: Clip.antiAlias,
-        child: GridView.builder(
-          physics: const NeverScrollableScrollPhysics(),
-          padding: EdgeInsets.zero,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: AppConstants.boardSize,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: GridView.builder(
+            physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: AppConstants.boardSize,
+            ),
+            itemCount: AppConstants.totalCells,
+            itemBuilder: (context, index) {
+              final row = index ~/ AppConstants.boardSize;
+              final col = index % AppConstants.boardSize;
+              final value = state.board.isEmpty ? 0 : state.board[index];
+
+              final isSelected = selected == index;
+              final isRelated = selected != null &&
+                  !isSelected &&
+                  (row == selected ~/ AppConstants.boardSize ||
+                      col == selected % AppConstants.boardSize ||
+                      (row ~/ AppConstants.boxSize ==
+                              (selected ~/ AppConstants.boardSize) ~/
+                                  AppConstants.boxSize &&
+                          col ~/ AppConstants.boxSize ==
+                              (selected % AppConstants.boardSize) ~/
+                                  AppConstants.boxSize));
+              final isSameValue =
+                  selectedValue != 0 && value == selectedValue && !isSelected;
+
+              return Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    right: col == AppConstants.boardSize - 1
+                        ? BorderSide.none
+                        : BorderSide(
+                            color: (col + 1) % AppConstants.boxSize == 0
+                                ? palette.gridLineThick
+                                : palette.gridLineThin,
+                            width: (col + 1) % AppConstants.boxSize == 0
+                                ? 1.5
+                                : 0.6,
+                          ),
+                    bottom: row == AppConstants.boardSize - 1
+                        ? BorderSide.none
+                        : BorderSide(
+                            color: (row + 1) % AppConstants.boxSize == 0
+                                ? palette.gridLineThick
+                                : palette.gridLineThin,
+                            width: (row + 1) % AppConstants.boxSize == 0
+                                ? 1.5
+                                : 0.6,
+                          ),
+                  ),
+                ),
+                child: CellWidget(
+                  palette: palette,
+                  onTap: () => onCellTap(index),
+                  state: CellVisualState(
+                    value: value,
+                    isGiven: state.isGivenCell(index),
+                    isSelected: isSelected,
+                    isRelated: isRelated,
+                    isSameValue: isSameValue,
+                    isIncorrect: state.incorrectCells.contains(index),
+                  ),
+                ),
+              );
+            },
           ),
-          itemCount: AppConstants.totalCells,
-          itemBuilder: (context, index) {
-            final row = index ~/ AppConstants.boardSize;
-            final col = index % AppConstants.boardSize;
-            final value = state.board.isEmpty ? 0 : state.board[index];
-
-            final isSelected = selected == index;
-            final isRelated = selected != null &&
-                !isSelected &&
-                (row == selected ~/ AppConstants.boardSize ||
-                    col == selected % AppConstants.boardSize ||
-                    (row ~/ AppConstants.boxSize ==
-                            (selected ~/ AppConstants.boardSize) ~/
-                                AppConstants.boxSize &&
-                        col ~/ AppConstants.boxSize ==
-                            (selected % AppConstants.boardSize) ~/
-                                AppConstants.boxSize));
-            final isSameValue =
-                selectedValue != 0 && value == selectedValue && !isSelected;
-
-            return Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  right: col == AppConstants.boardSize - 1
-                      ? BorderSide.none
-                      : BorderSide(
-                          color: (col + 1) % AppConstants.boxSize == 0
-                              ? palette.gridLineThick
-                              : palette.gridLineThin,
-                          width:
-                              (col + 1) % AppConstants.boxSize == 0 ? 1.5 : 0.6,
-                        ),
-                  bottom: row == AppConstants.boardSize - 1
-                      ? BorderSide.none
-                      : BorderSide(
-                          color: (row + 1) % AppConstants.boxSize == 0
-                              ? palette.gridLineThick
-                              : palette.gridLineThin,
-                          width:
-                              (row + 1) % AppConstants.boxSize == 0 ? 1.5 : 0.6,
-                        ),
-                  // right: BorderSide(
-                  //   color: (col + 1) % AppConstants.boxSize == 0 &&
-                  //           col != AppConstants.boardSize - 1
-                  //       ? palette.gridLineThick
-                  //       : palette.gridLineThin,
-                  //   width: (col + 1) % AppConstants.boxSize == 0 ? 1.5 : 0.6,
-                  // ),
-                  // bottom: BorderSide(
-                  //   color: (row + 1) % AppConstants.boxSize == 0 &&
-                  //           row != AppConstants.boardSize - 1
-                  //       ? palette.gridLineThick
-                  //       : palette.gridLineThin,
-                  //   width: (row + 1) % AppConstants.boxSize == 0 ? 1.5 : 0.6,
-                  // ),
-                ),
-              ),
-              child: CellWidget(
-                palette: palette,
-                onTap: () => onCellTap(index),
-                state: CellVisualState(
-                  value: value,
-                  isGiven: state.isGivenCell(index),
-                  isSelected: isSelected,
-                  isRelated: isRelated,
-                  isSameValue: isSameValue,
-                  isIncorrect: state.incorrectCells.contains(index),
-                ),
-              ),
-            );
-          },
         ),
       ),
     );
