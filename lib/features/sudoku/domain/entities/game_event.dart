@@ -75,3 +75,10 @@ class BoxCompletedEvent extends GameEvent {
   final int triggerCellIndex;
   BoxCompletedEvent(this.boxIndex, this.triggerCellIndex);
 }
+
+/// Highlights specific cells that conflict with a recently entered number.
+class ConflictingCellsEvent extends GameEvent {
+  final List<int> cells; // indices of conflicting cells
+  final int triggerCellIndex; // the cell where the player entered the number
+  ConflictingCellsEvent(this.cells, this.triggerCellIndex);
+}

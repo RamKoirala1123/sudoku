@@ -54,6 +54,7 @@ class NumberPadWidget extends StatelessWidget {
                       alignment: Alignment.center,
                       child: Column(
                         children: [
+                          const SizedBox(height: 4),
                           Text(
                             '$number',
                             style: theme.textTheme.headlineMedium?.copyWith(
@@ -70,6 +71,7 @@ class NumberPadWidget extends StatelessWidget {
                                   : colorScheme.onSurface,
                             ),
                           ),
+                          const SizedBox(height: 4),
                         ],
                       ),
                     ),

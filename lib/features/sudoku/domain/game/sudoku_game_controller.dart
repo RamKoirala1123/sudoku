@@ -278,6 +278,33 @@ class SudokuGameController extends ChangeNotifier {
         ),
       );
 
+      // Identify any existing cells in the same row/column/box that contain
+      // the same value — those are the actual conflicts the player caused.
+      final conflicts = <int>[];
+      for (int i = 0; i < newBoard.length; i++) {
+        if (i == selected) continue;
+        if (newBoard[i] != value) continue;
+
+        final r = i ~/ AppConstants.boardSize;
+        final c = i % AppConstants.boardSize;
+        final selR = selected ~/ AppConstants.boardSize;
+        final selC = selected % AppConstants.boardSize;
+
+        final inSameRow = r == selR;
+        final inSameCol = c == selC;
+        final inSameBox =
+            (r ~/ AppConstants.boxSize) == (selR ~/ AppConstants.boxSize) &&
+                (c ~/ AppConstants.boxSize) == (selC ~/ AppConstants.boxSize);
+
+        if (inSameRow || inSameCol || inSameBox) {
+          conflicts.add(i);
+        }
+      }
+
+      if (conflicts.isNotEmpty) {
+        _emitEvent(ConflictingCellsEvent(conflicts, selected));
+      }
+
       if (newLives <= 0) {
         _finishGame(won: false);
         return;

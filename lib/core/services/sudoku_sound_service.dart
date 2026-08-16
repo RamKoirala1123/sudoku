@@ -27,6 +27,12 @@ class SudokuSoundService {
     );
   }
 
+  Future<void> playBoardPlacing() async {
+    await _player.play(
+      AssetSource('sounds/board_placing.mp3'),
+    );
+  }
+
   Future<void> dispose() async {
     await _player.dispose();
   }

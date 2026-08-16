@@ -8,6 +8,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../domain/game/sudoku_game_state.dart';
 import '../../domain/entities/game_event.dart';
 import 'cell_widget.dart';
+import '../../../../core/services/sudoku_sound_service.dart';
 
 /// Renders the 9x9 Sudoku grid, visually divided into nine 3x3 boxes.
 /// Initial given numbers animate individually while the grid and cell
@@ -31,9 +32,11 @@ class SudokuBoardWidget extends StatefulWidget {
 class _SudokuBoardWidgetState extends State<SudokuBoardWidget>
     with TickerProviderStateMixin {
   late final AnimationController _controller;
+  final SudokuSoundService _soundService = SudokuSoundService();
   AnimationController? _waveController;
   Map<int, Animation<double>> _cellWaveAnimations = {};
   Map<int, Offset> _cellHighlightOffsets = {};
+  Map<int, bool> _cellErrorHighlights = {};
   StreamSubscription? _eventsSub;
 
   @override
@@ -44,6 +47,9 @@ class _SudokuBoardWidgetState extends State<SudokuBoardWidget>
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..forward();
+
+    // Play board placing sound in sync with the initial staggered animation.
+    _soundService.playBoardPlacing();
 
     if (widget.events != null) {
       _eventsSub = widget.events!.listen((event) {
@@ -60,6 +66,9 @@ class _SudokuBoardWidgetState extends State<SudokuBoardWidget>
           debugPrint(
               'BoxCompletedEvent: box=${event.boxIndex} trigger=${event.triggerCellIndex}');
           _startWave(_cellsInBox(event.boxIndex), event.triggerCellIndex);
+        } else if (event is ConflictingCellsEvent) {
+          // Animate only the conflicting cells (not the whole row/col/box).
+          _startWave(event.cells, event.triggerCellIndex, isError: true);
         }
       });
     }
@@ -69,6 +78,7 @@ class _SudokuBoardWidgetState extends State<SudokuBoardWidget>
   void dispose() {
     _eventsSub?.cancel();
     _waveController?.dispose();
+    _soundService.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -98,11 +108,14 @@ class _SudokuBoardWidgetState extends State<SudokuBoardWidget>
     return cells;
   }
 
-  void _startWave(List<int> cells, int triggerIndex) {
+  void _startWave(List<int> cells, int triggerIndex, {bool isError = false}) {
     _waveController?.dispose();
 
     _waveController = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 600));
+        vsync: this,
+        duration: isError
+            ? const Duration(milliseconds: 1000)
+            : const Duration(milliseconds: 600));
 
     // Compute Euclidean distance of each cell from trigger to stagger intervals
     final distances = <int, double>{};
@@ -123,6 +136,7 @@ class _SudokuBoardWidgetState extends State<SudokuBoardWidget>
 
     _cellWaveAnimations = {};
     _cellHighlightOffsets = {};
+    _cellErrorHighlights = {};
     for (final cell in cells) {
       final d = distances[cell]!;
       final start = (d / (maxDistance + 0.0001)) * 0.48;
@@ -143,6 +157,7 @@ class _SudokuBoardWidgetState extends State<SudokuBoardWidget>
       final dist = math.sqrt(dx * dx + dy * dy);
       final dir = dist == 0 ? Offset.zero : Offset(dx / dist, dy / dist);
       _cellHighlightOffsets[cell] = dir;
+      if (isError) _cellErrorHighlights[cell] = true;
     }
 
     debugPrint(
@@ -152,6 +167,7 @@ class _SudokuBoardWidgetState extends State<SudokuBoardWidget>
     _waveController!.forward(from: 0.0).whenComplete(() {
       _cellWaveAnimations = {};
       _cellHighlightOffsets = {};
+      _cellErrorHighlights = {};
       _waveController?.dispose();
       _waveController = null;
       setState(() {});
@@ -286,6 +302,7 @@ class _SudokuBoardWidgetState extends State<SudokuBoardWidget>
                   ),
                   highlightAnimation: _cellWaveAnimations[index],
                   highlightDirection: _cellHighlightOffsets[index],
+                  highlightIsError: _cellErrorHighlights[index] ?? false,
                 ),
               );
             },
