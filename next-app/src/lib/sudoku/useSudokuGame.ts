@@ -8,12 +8,44 @@ import {
   MoveRecord,
   SudokuGameState,
   SudokuPuzzle,
+  WaveAnimationData,
+  ShakeAnimationData,
 } from '../types';
 import { SudokuGenerator } from './engine';
 import { soundService } from '../sound/soundService';
 
 function makeLives(rule: MistakeRule): number {
   return rule === 'hardcore' ? 1 : rule === 'casual' ? 999 : 3;
+}
+
+function isRowCompleted(row: number, board: number[], solution: number[]): boolean {
+  const start = row * 9;
+  for (let i = 0; i < 9; i++) {
+    if (board[start + i] !== solution[start + i]) return false;
+  }
+  return true;
+}
+
+function isColumnCompleted(col: number, board: number[], solution: number[]): boolean {
+  for (let r = 0; r < 9; r++) {
+    const idx = r * 9 + col;
+    if (board[idx] !== solution[idx]) return false;
+  }
+  return true;
+}
+
+function isBoxCompleted(boxIndex: number, board: number[], solution: number[]): boolean {
+  const boxRow = Math.floor(boxIndex / 3);
+  const boxCol = boxIndex % 3;
+  const startRow = boxRow * 3;
+  const startCol = boxCol * 3;
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      const idx = (startRow + r) * 9 + (startCol + c);
+      if (board[idx] !== solution[idx]) return false;
+    }
+  }
+  return true;
 }
 
 const INITIAL_STATE: SudokuGameState = {
@@ -30,6 +62,8 @@ const INITIAL_STATE: SudokuGameState = {
   elapsedSeconds: 0,
   difficulty: 'medium',
   mistakeRule: 'standard',
+  waveAnimation: null,
+  shakeAnimation: null,
 };
 
 export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialRule: MistakeRule = 'standard') {
@@ -226,10 +260,9 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
       if (current.board[selected] === puzzle.solution[selected]) return current;
 
       // ----------------------------------------------------
-      // PENCIL / NOTE MODE
+      // PENCIL / NOTE MODE (Silent, no sound per user request)
       // ----------------------------------------------------
       if (pencilMode) {
-        soundService.playPlace();
         const currentList = current.candidates[selected] ?? [];
         const nextList = currentList.includes(val)
           ? currentList.filter((n) => n !== val)
@@ -270,7 +303,6 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
       });
 
       if (isCorrect) {
-        soundService.playSuccess();
         setLastDelta(50);
 
         // AUTO-CLEAR NOTES: erase this number from peers in same row, col, 3x3 box
@@ -278,6 +310,7 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
         const col = selected % 9;
         const boxRow = Math.floor(row / 3) * 3;
         const boxCol = Math.floor(col / 3) * 3;
+        const boxIndex = Math.floor(row / 3) * 3 + Math.floor(col / 3);
 
         const peerIndices = new Set<number>();
         for (let i = 0; i < 9; i++) {
@@ -301,6 +334,33 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
           }
         }
 
+        // Check completion of row, column, or 3x3 box matching Flutter logic
+        const completedCells = new Set<number>();
+
+        if (isRowCompleted(row, newBoard, puzzle.solution)) {
+          for (let c = 0; c < 9; c++) completedCells.add(row * 9 + c);
+        }
+        if (isColumnCompleted(col, newBoard, puzzle.solution)) {
+          for (let r = 0; r < 9; r++) completedCells.add(r * 9 + col);
+        }
+        if (isBoxCompleted(boxIndex, newBoard, puzzle.solution)) {
+          for (let r = 0; r < 3; r++) {
+            for (let c = 0; c < 3; c++) {
+              completedCells.add((boxRow + r) * 9 + (boxCol + c));
+            }
+          }
+        }
+
+        let waveAnim: WaveAnimationData | null = null;
+        if (completedCells.size > 0) {
+          waveAnim = {
+            id: Date.now(),
+            triggerIndex: selected,
+            cells: Array.from(completedCells),
+            isError: false,
+          };
+        }
+
         // Check if board solved
         const isSolved = newBoard.every((cell, idx) => cell === puzzle.solution[idx]);
         if (isSolved) {
@@ -310,6 +370,9 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
             spread: 80,
             origin: { y: 0.6 },
           });
+
+          // Wave outward across the whole board from final cell
+          const allCells = Array.from({ length: 81 }, (_, i) => i);
           return {
             ...current,
             board: newBoard,
@@ -318,6 +381,13 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
             correctCount: current.correctCount + 1,
             score: current.score + 100,
             status: 'won',
+            waveAnimation: {
+              id: Date.now(),
+              triggerIndex: selected,
+              cells: allCells,
+              isError: false,
+            },
+            shakeAnimation: null,
           };
         }
 
@@ -325,6 +395,8 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
         const allThisNumFilled = newBoard.filter((c) => c === val).length === 9;
         if (allThisNumFilled) {
           soundService.playNumberCompleted();
+        } else {
+          soundService.playSuccess();
         }
 
         return {
@@ -334,12 +406,39 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
           incorrectCells: newIncorrect,
           correctCount: current.correctCount + 1,
           score: current.score + 50,
+          waveAnimation: waveAnim ?? current.waveAnimation,
+          shakeAnimation: null,
         };
       } else {
-        // INCORRECT MOVE
+        // INCORRECT MOVE: cell and conflicting cells shake with error
         soundService.playError();
         setLastDelta(-20);
         newIncorrect.push(selected);
+
+        const row = Math.floor(selected / 9);
+        const col = selected % 9;
+
+        // Find conflicting cells in row, col, or 3x3 box with the same number
+        const conflicts: number[] = [];
+        for (let i = 0; i < 81; i++) {
+          if (i === selected) continue;
+          if (newBoard[i] !== val) continue;
+
+          const r = Math.floor(i / 9);
+          const c = i % 9;
+          const sameRow = r === row;
+          const sameCol = c === col;
+          const sameBox =
+            Math.floor(r / 3) === Math.floor(row / 3) &&
+            Math.floor(c / 3) === Math.floor(col / 3);
+
+          if (sameRow || sameCol || sameBox) {
+            conflicts.push(i);
+          }
+        }
+
+        const shakeCells = [selected, ...conflicts];
+        const now = Date.now();
 
         let newLives = current.lives;
         let newElapsed = current.elapsedSeconds;
@@ -363,6 +462,16 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
           elapsedSeconds: newElapsed,
           score: Math.max(0, current.score - 20),
           status: isLost ? 'lost' : 'playing',
+          shakeAnimation: {
+            id: now,
+            cellIndices: shakeCells,
+          },
+          waveAnimation: conflicts.length > 0 ? {
+            id: now + 1,
+            triggerIndex: selected,
+            cells: conflicts,
+            isError: true,
+          } : current.waveAnimation,
         };
       }
     });
@@ -463,6 +572,8 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
       mistakes: state.wrongCount,
     },
     isGenerating,
+    waveAnimation: state.waveAnimation,
+    shakeAnimation: state.shakeAnimation,
     selectedCell: state.selectedCell,
     isNotesMode: pencilMode,
     pencilMode,

@@ -65,6 +65,18 @@ export interface MoveRecord {
   isErase: boolean;
 }
 
+export interface WaveAnimationData {
+  id: number;
+  triggerIndex: number;
+  cells: number[];
+  isError?: boolean;
+}
+
+export interface ShakeAnimationData {
+  id: number;
+  cellIndices: number[];
+}
+
 export interface SudokuGameState {
   puzzle: SudokuPuzzle | null;
   board: number[];
@@ -79,6 +91,8 @@ export interface SudokuGameState {
   elapsedSeconds: number;
   difficulty: Difficulty;
   mistakeRule: MistakeRule;
+  waveAnimation?: WaveAnimationData | null;
+  shakeAnimation?: ShakeAnimationData | null;
 }
 
 export interface PlayerProgress {

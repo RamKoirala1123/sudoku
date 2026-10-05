@@ -42,6 +42,7 @@ interface SavedSession {
   isMultiplayer: boolean;
   score: number;
   timeFormatted: string;
+  theme?: "dark" | "light";
 }
 
 interface PlayerStats {
@@ -52,8 +53,15 @@ interface PlayerStats {
 }
 
 export default function SudokuApp() {
-  // Appearance & Audio state
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
+  // Appearance & Audio state - initialized from localStorage to persist across refresh
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("sudoku_theme");
+      if (saved) return saved === "dark";
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
+    return true;
+  });
   const [isMuted, setIsMuted] = useState<boolean>(false);
 
   // App navigation state
@@ -105,6 +113,8 @@ export default function SudokuApp() {
     remainingCounts,
     timeFormatted,
     lastDelta,
+    waveAnimation,
+    shakeAnimation,
   } = useSudokuGame(difficulty, mistakeRule);
 
   // Load user settings, stats, and session on mount
@@ -140,44 +150,54 @@ export default function SudokuApp() {
       if (savedStatsStr) {
         try {
           setStats(JSON.parse(savedStatsStr));
-        } catch {}
+        } catch { }
       }
 
       if (savedSessionStr) {
         try {
-          setActiveSession(JSON.parse(savedSessionStr));
-        } catch {}
+          const parsed = JSON.parse(savedSessionStr);
+          setActiveSession(parsed);
+          if (parsed.theme && !savedTheme) {
+            setIsDarkMode(parsed.theme === "dark");
+          }
+        } catch { }
       }
 
       // Check URL hash for direct join (#join=123456 or #room=123456)
       const hash = window.location.hash;
       const match = hash.match(/(?:join|room)=([0-9]{6})/);
       if (match && match[1]) {
-        handleJoinRoom(match[1]).catch(() => {});
+        handleJoinRoom(match[1]).catch(() => { });
       }
     }
   }, []);
 
-
-  // Update theme class and data-theme on document & body
+  // Update theme class and data-theme on document & body and sync to localStorage
   useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add("dark");
-      document.documentElement.setAttribute("data-theme", "dark");
-      document.body.classList.add("dark");
-      document.body.setAttribute("data-theme", "dark");
-      localStorage.setItem("sudoku_theme", "dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-      document.documentElement.setAttribute("data-theme", "light");
-      document.body.classList.remove("dark");
-      document.body.setAttribute("data-theme", "light");
-      localStorage.setItem("sudoku_theme", "light");
+    if (typeof window === "undefined") return;
+    const themeStr = isDarkMode ? "dark" : "light";
+    document.documentElement.classList.toggle("dark", isDarkMode);
+    document.documentElement.setAttribute("data-theme", themeStr);
+    if (document.body) {
+      document.body.classList.toggle("dark", isDarkMode);
+      document.body.setAttribute("data-theme", themeStr);
     }
+    localStorage.setItem("sudoku_theme", themeStr);
   }, [isDarkMode]);
 
   const handleToggleTheme = () => {
-    setIsDarkMode((prev) => !prev);
+    setIsDarkMode((prev) => {
+      const next = !prev;
+      const themeStr = next ? "dark" : "light";
+      localStorage.setItem("sudoku_theme", themeStr);
+      document.documentElement.classList.toggle("dark", next);
+      document.documentElement.setAttribute("data-theme", themeStr);
+      if (document.body) {
+        document.body.classList.toggle("dark", next);
+        document.body.setAttribute("data-theme", themeStr);
+      }
+      return next;
+    });
   };
 
   const handleToggleMute = () => {
@@ -198,13 +218,14 @@ export default function SudokuApp() {
     startNewGame(diff, mistakeRule);
     setMode("solo_game");
 
-    // Save active session
+    // Save active session with current theme
     const sess: SavedSession = {
       difficulty: diff,
       mistakeRule,
       isMultiplayer: false,
       score: 0,
       timeFormatted: "00:00",
+      theme: isDarkMode ? "dark" : "light",
     };
     setActiveSession(sess);
     localStorage.setItem("sudoku_active_session", JSON.stringify(sess));
@@ -412,9 +433,8 @@ export default function SudokuApp() {
   return (
     <main
       data-theme={isDarkMode ? "dark" : "light"}
-      className={`min-h-screen flex flex-col items-center justify-start pb-6 px-3 transition-colors ${
-        isDarkMode ? "dark bg-[#11131A] text-[#F3F4FA]" : "bg-[#F6F7FB] text-[#1E2233]"
-      }`}
+      className={`min-h-screen flex flex-col items-center justify-start pb-6 px-3 transition-colors ${isDarkMode ? "dark bg-[#11131A] text-[#F3F4FA]" : "bg-[#F6F7FB] text-[#1E2233]"
+        }`}
     >
       {/* Floating Emojis */}
       <FloatingEmojiOverlay emojis={floatingEmojis} />
@@ -756,6 +776,8 @@ export default function SudokuApp() {
                       onSelectCell={selectCell}
                       isSpectating={isSpectating}
                       isDarkMode={isDarkMode}
+                      waveAnimation={waveAnimation}
+                      shakeAnimation={shakeAnimation}
                     />
                   </div>
                 </div>
@@ -787,6 +809,8 @@ export default function SudokuApp() {
                     onSelectCell={selectCell}
                     isSpectating={isSpectating}
                     isDarkMode={isDarkMode}
+                    waveAnimation={waveAnimation}
+                    shakeAnimation={shakeAnimation}
                   />
                 </div>
 
