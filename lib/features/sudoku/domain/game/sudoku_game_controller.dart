@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:sudoku_duel/core/services/sudoku_sound_service.dart';
 
+import '../../../multiplayer/domain/mistake_rule.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../engine/sudoku_generator.dart';
 import '../entities/difficulty.dart';
@@ -11,6 +12,7 @@ import '../entities/game_event.dart';
 import '../entities/game_status.dart';
 import '../entities/game_summary.dart';
 import '../entities/sudoku_move.dart';
+import '../entities/sudoku_puzzle.dart';
 import 'sudoku_game_state.dart';
 
 /// Orchestrates a single game of Sudoku.
@@ -31,11 +33,14 @@ class SudokuGameController extends ChangeNotifier {
   SudokuGameState _state;
   Timer? _ticker;
   bool _showMistakes;
+  MistakeRule _mistakeRule;
 
   final _eventsController = StreamController<GameEvent>.broadcast();
   final List<_MoveRecord> _moveHistory = [];
 
   Stream<GameEvent> get events => _eventsController.stream;
+  bool get canUndo => _moveHistory.isNotEmpty && _state.status == GameStatus.playing;
+  MistakeRule get mistakeRule => _mistakeRule;
 
   /// Invoked exactly once when a game reaches won/lost, so the presentation
   /// layer can persist it via the Statistics feature without this class
@@ -45,7 +50,10 @@ class SudokuGameController extends ChangeNotifier {
   SudokuGameController({
     required Difficulty difficulty,
     bool showMistakes = true,
-  })  : _state = SudokuGameState.initial(difficulty),
+    MistakeRule mistakeRule = MistakeRule.standard,
+  })  : _mistakeRule = mistakeRule,
+        _state = SudokuGameState.initial(difficulty)
+            .copyWith(lives: mistakeRule.initialLives),
         _showMistakes = showMistakes;
 
   SudokuGameState get state => _state;
@@ -79,12 +87,59 @@ class SudokuGameController extends ChangeNotifier {
     _state = SudokuGameState.initial(targetDifficulty).copyWith(
       puzzle: puzzle,
       board: List<int>.from(puzzle.givens),
+      lives: _mistakeRule.initialLives,
       status: GameStatus.playing,
     );
 
     _emitState();
     _emitEvent(GameStartedEvent());
 
+    _startTicker();
+  }
+
+  /// Starts the game with an already created [SudokuPuzzle] (essential for
+  /// multiplayer duels so both peers play the exact same puzzle).
+  void startWithPuzzle(SudokuPuzzle puzzle, {MistakeRule? mistakeRule}) {
+    if (mistakeRule != null) _mistakeRule = mistakeRule;
+    _ticker?.cancel();
+    _moveHistory.clear();
+
+    _state = SudokuGameState.initial(puzzle.difficulty).copyWith(
+      puzzle: puzzle,
+      board: List<int>.from(puzzle.givens),
+      lives: _mistakeRule.initialLives,
+      status: GameStatus.playing,
+    );
+
+    _emitState();
+    _emitEvent(GameStartedEvent());
+    _startTicker();
+  }
+
+  /// Restores a previously active game session from local storage (e.g. after browser refresh)
+  void restoreGameState({
+    required SudokuPuzzle puzzle,
+    required List<int> board,
+    required Map<int, Set<int>> candidates,
+    required int lives,
+    required int score,
+    required int elapsedSeconds,
+  }) {
+    _ticker?.cancel();
+    _moveHistory.clear();
+
+    _state = SudokuGameState.initial(puzzle.difficulty).copyWith(
+      puzzle: puzzle,
+      board: List<int>.from(board),
+      candidates: Map<int, Set<int>>.from(candidates),
+      lives: lives,
+      score: score,
+      elapsedSeconds: elapsedSeconds,
+      status: GameStatus.playing,
+    );
+
+    _emitState();
+    _emitEvent(GameStartedEvent());
     _startTicker();
   }
 
@@ -118,10 +173,13 @@ class SudokuGameController extends ChangeNotifier {
     if (selected == null) return;
     if (_state.isGivenCell(selected)) return;
     if (value < 1 || value > 9) return;
-    // Only allow entering a number into an empty cell. If the cell already
-    // contains a player-filled value (correct or incorrect), require the
-    // player to erase it first.
-    if (_state.board[selected] != 0) return;
+    // Cannot modify already correctly solved cells
+    if (_state.puzzle != null &&
+        _state.board[selected] == _state.puzzle!.solution[selected]) {
+      return;
+    }
+    // If cell already contains this exact value, ignore
+    if (_state.board[selected] == value) return;
 
     final solution = _state.puzzle!.solution;
 
@@ -130,7 +188,6 @@ class SudokuGameController extends ChangeNotifier {
     final newBoard = List<int>.from(_state.board);
     newBoard[selected] = value;
 
-    // when a number is placed, clear any pencil marks for that cell
     final newCandidates = Map<int, Set<int>>.from(_state.candidates);
     newCandidates.remove(selected);
 
@@ -140,6 +197,35 @@ class SudokuGameController extends ChangeNotifier {
 
     if (isCorrect) {
       newIncorrect.remove(selected);
+
+      // Auto-clear notes: automatically erase that number from pencil notes
+      // in the same row, column, and 3x3 box (like Sudoku.com)
+      final row = selected ~/ AppConstants.boardSize;
+      final col = selected % AppConstants.boardSize;
+      final boxRow = (row ~/ AppConstants.boxSize) * AppConstants.boxSize;
+      final boxCol = (col ~/ AppConstants.boxSize) * AppConstants.boxSize;
+
+      final peerIndices = <int>{};
+      for (int i = 0; i < AppConstants.boardSize; i++) {
+        peerIndices.add(row * AppConstants.boardSize + i); // same row
+        peerIndices.add(i * AppConstants.boardSize + col); // same col
+      }
+      for (int r = 0; r < AppConstants.boxSize; r++) {
+        for (int c = 0; c < AppConstants.boxSize; c++) {
+          peerIndices.add((boxRow + r) * AppConstants.boardSize + (boxCol + c)); // same box
+        }
+      }
+
+      for (final peer in peerIndices) {
+        if (newCandidates.containsKey(peer)) {
+          final updated = Set<int>.from(newCandidates[peer]!)..remove(value);
+          if (updated.isEmpty) {
+            newCandidates.remove(peer);
+          } else {
+            newCandidates[peer] = updated;
+          }
+        }
+      }
     } else if (_showMistakes) {
       newIncorrect.add(selected);
     }
@@ -256,14 +342,24 @@ class SudokuGameController extends ChangeNotifier {
       );
 
       final newWrong = _state.wrongCount + 1;
+      final int newLives;
+      final int newElapsed;
 
-      final newLives = _state.lives - 1;
+      if (_mistakeRule == MistakeRule.casual) {
+        // Unlimited mistakes with time penalties (+30s per mistake)
+        newLives = _state.lives;
+        newElapsed = _state.elapsedSeconds + 30;
+      } else {
+        newLives = _state.lives - 1;
+        newElapsed = _state.elapsedSeconds;
+      }
 
       _state = _state.copyWith(
         board: newBoard,
         score: newScore,
         wrongCount: newWrong,
         lives: newLives,
+        elapsedSeconds: newElapsed,
         incorrectCells: newIncorrect,
         candidates: newCandidates,
       );
@@ -305,7 +401,7 @@ class SudokuGameController extends ChangeNotifier {
         _emitEvent(ConflictingCellsEvent(conflicts, selected));
       }
 
-      if (newLives <= 0) {
+      if (_mistakeRule != MistakeRule.casual && newLives <= 0) {
         _finishGame(won: false);
         return;
       }
@@ -463,7 +559,7 @@ class SudokuGameController extends ChangeNotifier {
     }
 
     var newLives = _state.lives;
-    if (!last.wasCorrect) {
+    if (!last.wasCorrect && _mistakeRule != MistakeRule.casual) {
       // if the undone move was incorrect and had reduced lives, restore one life
       newLives = _state.lives + 1;
     }

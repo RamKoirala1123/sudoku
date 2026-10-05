@@ -178,7 +178,7 @@ class _SudokuBoardWidgetState extends State<SudokuBoardWidget>
   ///
   /// The animation is passed to CellWidget, so only the number gets animated.
   Animation<double> _cellAnimation(int index) {
-    final totalCells = AppConstants.totalCells;
+    const totalCells = AppConstants.totalCells;
 
     final start = (index / totalCells) * 0.8;
     final end = start + 0.2;
@@ -208,22 +208,22 @@ class _SudokuBoardWidgetState extends State<SudokuBoardWidget>
       child: Container(
         decoration: BoxDecoration(
           color: palette.background,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: palette.gridLineThick,
-            width: 2,
+            width: 2.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 24,
-              offset: const Offset(0, 12),
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
         clipBehavior: Clip.antiAlias,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(10),
           child: GridView.builder(
             physics: const NeverScrollableScrollPhysics(),
             padding: EdgeInsets.zero,
@@ -266,8 +266,8 @@ class _SudokuBoardWidgetState extends State<SudokuBoardWidget>
                                 ? palette.gridLineThick
                                 : palette.gridLineThin,
                             width: (col + 1) % AppConstants.boxSize == 0
-                                ? 1.5
-                                : 0.6,
+                                ? 2.0
+                                : 1.0,
                           ),
                     bottom: row == AppConstants.boardSize - 1
                         ? BorderSide.none
@@ -276,8 +276,8 @@ class _SudokuBoardWidgetState extends State<SudokuBoardWidget>
                                 ? palette.gridLineThick
                                 : palette.gridLineThin,
                             width: (row + 1) % AppConstants.boxSize == 0
-                                ? 1.5
-                                : 0.6,
+                                ? 2.0
+                                : 1.0,
                           ),
                   ),
                 ),
