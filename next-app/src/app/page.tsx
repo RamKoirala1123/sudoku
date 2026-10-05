@@ -64,7 +64,23 @@ function spawnFloatingEmojiItem(emoji: string, senderName: string): FloatingEmoj
 }
 
 export default function SudokuApp() {
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const savedTheme = localStorage.getItem("sudoku_theme") || sessionStorage.getItem("sudoku_theme");
+      if (savedTheme === "dark") return true;
+      if (savedTheme === "light") return false;
+      const savedSessionStr = localStorage.getItem("sudoku_active_session") || sessionStorage.getItem("sudoku_active_session");
+      if (savedSessionStr) {
+        try {
+          const parsed = JSON.parse(savedSessionStr);
+          if (parsed?.theme === "dark") return true;
+          if (parsed?.theme === "light") return false;
+        } catch { }
+      }
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
+    return true;
+  });
   const mounted = useSyncExternalStore(
     () => () => { },
     () => true,
@@ -130,87 +146,68 @@ export default function SudokuApp() {
 
   // Sync client storage and settings after hydration
   useEffect(() => {
-    queueMicrotask(() => {
-      if (typeof window === "undefined") return;
+    if (typeof window === "undefined") return;
 
-      const savedTheme = localStorage.getItem("sudoku_theme") || sessionStorage.getItem("sudoku_theme");
-      const savedMute = localStorage.getItem("sudoku_muted");
-      const savedNick = localStorage.getItem("sudoku_nickname");
-      const savedStatsStr = localStorage.getItem("sudoku_stats");
-      const savedSessionStr = localStorage.getItem("sudoku_active_session") || sessionStorage.getItem("sudoku_active_session");
+    const savedTheme = localStorage.getItem("sudoku_theme") || sessionStorage.getItem("sudoku_theme");
+    const savedMute = localStorage.getItem("sudoku_muted");
+    const savedNick = localStorage.getItem("sudoku_nickname");
+    const savedStatsStr = localStorage.getItem("sudoku_stats");
+    const savedSessionStr = localStorage.getItem("sudoku_active_session") || sessionStorage.getItem("sudoku_active_session");
 
-      let resolvedDark = true;
-      if (savedTheme === "dark") {
-        resolvedDark = true;
-      } else if (savedTheme === "light") {
-        resolvedDark = false;
-      } else if (savedSessionStr) {
-        try {
-          const parsed = JSON.parse(savedSessionStr);
-          if (parsed?.theme) {
-            resolvedDark = parsed.theme === "dark";
-          } else {
-            resolvedDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-          }
-        } catch {
+    let resolvedDark = true;
+    if (savedTheme === "dark") {
+      resolvedDark = true;
+    } else if (savedTheme === "light") {
+      resolvedDark = false;
+    } else if (savedSessionStr) {
+      try {
+        const parsed = JSON.parse(savedSessionStr);
+        if (parsed?.theme) {
+          resolvedDark = parsed.theme === "dark";
+        } else {
           resolvedDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
         }
-      } else {
+      } catch {
         resolvedDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
       }
+    } else {
+      resolvedDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
 
-      setIsDarkMode(resolvedDark);
-      const themeStr = resolvedDark ? "dark" : "light";
-      document.documentElement.classList.toggle("dark", resolvedDark);
-      document.documentElement.setAttribute("data-theme", themeStr);
-      if (document.body) {
-        document.body.classList.toggle("dark", resolvedDark);
-        document.body.setAttribute("data-theme", themeStr);
-      }
-      localStorage.setItem("sudoku_theme", themeStr);
-      sessionStorage.setItem("sudoku_theme", themeStr);
-
-      if (savedMute) {
-        const muted = savedMute === "true";
-        setIsMuted(muted);
-        soundService.setMuted(muted);
-      }
-
-      if (savedNick) {
-        setNickname(savedNick);
-      } else {
-        const randomNick = `Player${Math.floor(1000 + Math.random() * 9000)}`;
-        setNickname(randomNick);
-        localStorage.setItem("sudoku_nickname", randomNick);
-      }
-
-      if (savedStatsStr) {
-        try {
-          setStats(JSON.parse(savedStatsStr));
-        } catch { }
-      }
-
-      if (savedSessionStr) {
-        try {
-          setActiveSession(JSON.parse(savedSessionStr));
-        } catch { }
-      }
-    });
-  }, []);
-
-  // Sync theme class and data-theme on document & body and save to storage
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const themeStr = isDarkMode ? "dark" : "light";
-    document.documentElement.classList.toggle("dark", isDarkMode);
+    setIsDarkMode(resolvedDark);
+    const themeStr = resolvedDark ? "dark" : "light";
+    document.documentElement.classList.toggle("dark", resolvedDark);
     document.documentElement.setAttribute("data-theme", themeStr);
     if (document.body) {
-      document.body.classList.toggle("dark", isDarkMode);
+      document.body.classList.toggle("dark", resolvedDark);
       document.body.setAttribute("data-theme", themeStr);
     }
-    localStorage.setItem("sudoku_theme", themeStr);
-    sessionStorage.setItem("sudoku_theme", themeStr);
-  }, [isDarkMode]);
+    if (savedMute) {
+      const muted = savedMute === "true";
+      setIsMuted(muted);
+      soundService.setMuted(muted);
+    }
+
+    if (savedNick) {
+      setNickname(savedNick);
+    } else {
+      const randomNick = `Player${Math.floor(1000 + Math.random() * 9000)}`;
+      setNickname(randomNick);
+      localStorage.setItem("sudoku_nickname", randomNick);
+    }
+
+    if (savedStatsStr) {
+      try {
+        setStats(JSON.parse(savedStatsStr));
+      } catch { }
+    }
+
+    if (savedSessionStr) {
+      try {
+        setActiveSession(JSON.parse(savedSessionStr));
+      } catch { }
+    }
+  }, []);
 
   const handleToggleTheme = () => {
     setIsDarkMode((prev) => {
@@ -587,10 +584,7 @@ export default function SudokuApp() {
 
   return (
     <main
-      suppressHydrationWarning
-      data-theme={isDarkMode ? "dark" : "light"}
-      className={`min-h-screen flex flex-col items-center justify-start pb-6 px-3 transition-colors ${isDarkMode ? "dark bg-[#11131A] text-[#F3F4FA]" : "bg-[#F6F7FB] text-[#1E2233]"
-        }`}
+      className="min-h-screen flex flex-col items-center justify-start pb-6 px-3 transition-colors bg-background text-foreground"
     >
       {/* Floating Emojis */}
       <FloatingEmojiOverlay emojis={floatingEmojis} />
