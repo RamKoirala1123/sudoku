@@ -63,6 +63,7 @@ const INITIAL_STATE: SudokuGameState = {
   mistakeRule: 'standard',
   waveAnimation: null,
   shakeAnimation: null,
+  conflictHighlight: null,
 };
 
 export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialRule: MistakeRule = 'standard') {
@@ -259,22 +260,105 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
       if (current.board[selected] === puzzle.solution[selected]) return current;
 
       // ----------------------------------------------------
-      // PENCIL / NOTE MODE (Silent, no sound per user request)
+      // RE-ENTERING SAME NUMBER ON ERROR CELL -> REMOVE IT
+      // If the cell contains an incorrect number and the user enters
+      // that same number again, remove that number from the board
+      // ----------------------------------------------------
+      if (current.incorrectCells.includes(selected) && current.board[selected] === val) {
+        const newBoard = [...current.board];
+        newBoard[selected] = 0;
+
+        const newCandidates = { ...current.candidates };
+        delete newCandidates[selected];
+
+        const newIncorrect = current.incorrectCells.filter((i) => i !== selected);
+
+        moveHistoryRef.current.push({
+          cellIndex: selected,
+          previousValue: val,
+          newValue: 0,
+          wasCorrect: false,
+          isErase: true,
+        });
+
+        return {
+          ...current,
+          board: newBoard,
+          candidates: newCandidates,
+          incorrectCells: newIncorrect,
+          conflictHighlight: null,
+          shakeAnimation: null,
+        };
+      }
+
+      // ----------------------------------------------------
+      // PENCIL / NOTE MODE:
+      // Validates against row, column, and 3x3 box.
+      // Rejects conflicting numbers & highlights conflicting cells in red!
       // ----------------------------------------------------
       if (pencilMode) {
         const currentList = current.candidates[selected] ?? [];
-        const nextList = currentList.includes(val)
-          ? currentList.filter((n) => n !== val)
-          : [...currentList, val].sort((a, b) => a - b);
-
-        const newCandidates = { ...current.candidates };
-        if (nextList.length === 0) {
-          delete newCandidates[selected];
-        } else {
-          newCandidates[selected] = nextList;
+        if (currentList.includes(val)) {
+          // Toggling off an existing note is always allowed
+          const nextList = currentList.filter((n) => n !== val);
+          const newCandidates = { ...current.candidates };
+          if (nextList.length === 0) {
+            delete newCandidates[selected];
+          } else {
+            newCandidates[selected] = nextList;
+          }
+          return { ...current, candidates: newCandidates, conflictHighlight: null };
         }
 
-        return { ...current, candidates: newCandidates };
+        // User is attempting to add 'val' as a note:
+        // Check if 'val' already exists on the board in the same row, col, or 3x3 box
+        const row = Math.floor(selected / 9);
+        const col = selected % 9;
+        const boxRow = Math.floor(row / 3) * 3;
+        const boxCol = Math.floor(col / 3) * 3;
+
+        const conflictingCells: number[] = [];
+        // Check row
+        for (let c = 0; c < 9; c++) {
+          const idx = row * 9 + c;
+          if (idx !== selected && current.board[idx] === val) {
+            conflictingCells.push(idx);
+          }
+        }
+        // Check column
+        for (let r = 0; r < 9; r++) {
+          const idx = r * 9 + col;
+          if (idx !== selected && current.board[idx] === val && !conflictingCells.includes(idx)) {
+            conflictingCells.push(idx);
+          }
+        }
+        // Check 3x3 box
+        for (let r = 0; r < 3; r++) {
+          for (let c = 0; c < 3; c++) {
+            const idx = (boxRow + r) * 9 + (boxCol + c);
+            if (idx !== selected && current.board[idx] === val && !conflictingCells.includes(idx)) {
+              conflictingCells.push(idx);
+            }
+          }
+        }
+
+        // If there is any conflict on the board:
+        // DO NOT let user enter that number, and highlight the conflicting cells in red!
+        if (conflictingCells.length > 0) {
+          soundService.playError();
+          return {
+            ...current,
+            conflictHighlight: {
+              id: Date.now(),
+              cellIndices: [selected, ...conflictingCells],
+            },
+          };
+        }
+
+        // No conflict: Add note
+        const nextList = [...currentList, val].sort((a, b) => a - b);
+        const newCandidates = { ...current.candidates, [selected]: nextList };
+        return { ...current, candidates: newCandidates, conflictHighlight: null };
       }
 
       // ----------------------------------------------------
@@ -548,7 +632,7 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
   }, []);
 
   const remainingCounts = [1, 2, 3, 4, 5, 6, 7, 8, 9].reduce((acc, num) => {
-    const count = state.board.filter((v) => v === num).length;
+    const count = state.board.filter((v, idx) => v === num && !state.incorrectCells.includes(idx)).length;
     acc[num] = Math.max(0, 9 - count);
     return acc;
   }, {} as Record<number, number>);
@@ -572,6 +656,7 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
     isGenerating,
     waveAnimation: state.waveAnimation,
     shakeAnimation: state.shakeAnimation,
+    conflictHighlight: state.conflictHighlight,
     selectedCell: state.selectedCell,
     isNotesMode: pencilMode,
     pencilMode,

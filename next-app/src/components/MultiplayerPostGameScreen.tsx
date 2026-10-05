@@ -497,14 +497,25 @@ export const MultiplayerPostGameScreen: React.FC<MultiplayerPostGameScreenProps>
         {isHost ? (
           <>
             {/* Host: Play Rematch with New Puzzle */}
-            <button
-              type="button"
-              onClick={onRematch}
-              className="w-full py-4 rounded-[18px] bg-gradient-to-r from-[#5B6CFF] to-[#7C8CFF] hover:opacity-95 text-white font-black text-base shadow-lg shadow-[#5B6CFF]/30 active:scale-98 transition flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <RefreshCw className="w-5 h-5 fill-none" />
-              <span>Play Rematch (New Puzzle)</span>
-            </button>
+            {sortedStandings.length < 2 ? (
+              <button
+                type="button"
+                disabled
+                className="w-full py-4 rounded-[18px] bg-black/[0.06] dark:bg-white/[0.08] text-[#1E2233]/40 dark:text-[#F3F4FA]/40 font-bold text-sm sm:text-base border border-black/[0.06] dark:border-white/[0.06] flex items-center justify-center gap-2 cursor-not-allowed select-none"
+              >
+                <Users className="w-5 h-5 opacity-40" />
+                <span>Opponents Left (Return to Lobby to Play)</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onRematch}
+                className="w-full py-4 rounded-[18px] bg-gradient-to-r from-[#5B6CFF] to-[#7C8CFF] hover:opacity-95 text-white font-black text-base shadow-lg shadow-[#5B6CFF]/30 active:scale-98 transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <RefreshCw className="w-5 h-5 fill-none" />
+                <span>Play Rematch (New Puzzle)</span>
+              </button>
+            )}
 
             {/* Host: Return to Lobby */}
             <button

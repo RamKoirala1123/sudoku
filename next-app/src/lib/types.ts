@@ -93,6 +93,7 @@ export interface SudokuGameState {
   mistakeRule: MistakeRule;
   waveAnimation?: WaveAnimationData | null;
   shakeAnimation?: ShakeAnimationData | null;
+  conflictHighlight?: { id: number; cellIndices: number[] } | null;
 }
 
 export interface PlayerProgress {

@@ -11,6 +11,7 @@ interface SudokuBoardProps {
   isDarkMode?: boolean;
   waveAnimation?: WaveAnimationData | null;
   shakeAnimation?: ShakeAnimationData | null;
+  conflictHighlight?: { id: number; cellIndices: number[] } | null;
 }
 
 export const SudokuBoard: React.FC<SudokuBoardProps> = ({
@@ -20,6 +21,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = ({
   isDarkMode = false,
   waveAnimation,
   shakeAnimation,
+  conflictHighlight,
 }) => {
   const { board, puzzle, selectedCell, candidates, incorrectCells } = state;
   const hasPlayedInitialSoundRef = useRef(false);
@@ -47,8 +49,16 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = ({
     cells: Set<number>;
   } | null>(null);
 
+  // Note conflict highlight state (temporarily flashes conflicting row/col/box cells in red)
+  const lastConflictIdRef = useRef<number | null>(null);
+  const [activeConflict, setActiveConflict] = useState<{
+    id: number;
+    cells: Set<number>;
+  } | null>(null);
+
   const incomingWave = waveAnimation ?? state.waveAnimation;
   const incomingShake = shakeAnimation ?? state.shakeAnimation;
+  const incomingConflict = conflictHighlight ?? state.conflictHighlight;
 
   // Compute staggered Euclidean distance delays & normalized directions for wave flow
   useEffect(() => {
@@ -112,6 +122,21 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = ({
 
     return () => clearTimeout(timeout);
   }, [incomingShake]);
+
+  // Handle note conflict highlight (temporarily glows row/col/box cells in red for ~850ms)
+  useEffect(() => {
+    if (!incomingConflict || incomingConflict.id === lastConflictIdRef.current) return;
+    lastConflictIdRef.current = incomingConflict.id;
+
+    const { id, cellIndices } = incomingConflict;
+    setActiveConflict({ id, cells: new Set(cellIndices) });
+
+    const timeout = setTimeout(() => {
+      setActiveConflict((curr) => (curr?.id === id ? null : curr));
+    }, 850);
+
+    return () => clearTimeout(timeout);
+  }, [incomingConflict]);
 
   // Arrow key navigation to move selected cell across the 9x9 grid
   useEffect(() => {
@@ -229,13 +254,16 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = ({
           const isIncorrect = incorrectCells.includes(index);
           const cellCandidates = candidates[index] || [];
 
-          // Cell Wave & Shake status
+          // Cell Wave, Shake & Conflict status
           const cellWave = activeWave?.cells.get(index);
           const isShaking = activeShaking?.cells.has(index);
+          const isConflicting = activeConflict?.cells.has(index);
 
           // Cell Background color priority
           let cellBg = "transparent";
-          if (isSelected) {
+          if (isConflicting) {
+            cellBg = palette.errorCell;
+          } else if (isSelected) {
             cellBg = palette.selectedCell;
           } else if (isIncorrect) {
             cellBg = palette.errorCell;
@@ -247,7 +275,9 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = ({
 
           // Text color priority
           let cellTextColor = palette.playerText;
-          if (isIncorrect) {
+          if (isConflicting) {
+            cellTextColor = palette.errorText;
+          } else if (isIncorrect) {
             cellTextColor = palette.errorText;
           } else if (isGiven) {
             cellTextColor = palette.givenText;
@@ -280,7 +310,9 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = ({
                 backgroundColor: cellBg,
                 borderRight: borderRightStyle,
                 borderBottom: borderBottomStyle,
-                animation: isShaking
+                animation: isConflicting
+                  ? "cellGentleShake 380ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both"
+                  : isShaking
                   ? "cellErrorShake 450ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both"
                   : undefined,
               }}
@@ -333,24 +365,14 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = ({
                       return <div key={num} className="flex items-center justify-center" />;
                     }
 
-                    const boxIdx = Math.floor(row / 3) * 3 + Math.floor(col / 3);
                     const isSelectedCandidate = selectedVal !== null && selectedVal !== 0 && selectedVal === num;
-                    const isConflict = rowNumbers[row].has(num) || colNumbers[col].has(num) || boxNumbers[boxIdx].has(num);
 
                     let noteColor = palette.playerText;
                     let noteBg = "transparent";
                     let noteFontWeight = 400;
                     let noteTransform = "scale(1)";
 
-                    if (isConflict && isSelectedCandidate) {
-                      noteBg = palette.errorCell;
-                      noteColor = palette.errorText;
-                      noteFontWeight = 700;
-                      noteTransform = "scale(1.2)";
-                    } else if (isConflict) {
-                      noteColor = palette.errorText;
-                      noteFontWeight = 600;
-                    } else if (isSelectedCandidate) {
+                    if (isSelectedCandidate) {
                       noteBg = isDarkMode ? "#2D4875" : "#CCE5FF";
                       noteColor = isDarkMode ? "#82B8FF" : "#005CBD";
                       noteFontWeight = 700;

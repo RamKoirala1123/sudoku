@@ -278,17 +278,35 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
       {/* Match Launch Area */}
       {isHost ? (
         <div className="space-y-2">
-          <button
-            type="button"
-            onClick={onStartMatch}
-            className="w-full py-4 rounded-[18px] bg-gradient-to-r from-[#5B6CFF] to-[#7C8CFF] hover:opacity-95 text-white font-black text-base shadow-lg shadow-[#5B6CFF]/30 active:scale-98 transition flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <Play className="w-5 h-5 fill-white" />
-            <span>Start Match Now</span>
-          </button>
-          <span className="text-xs text-center text-[#1E2233]/50 dark:text-[#F3F4FA]/50 block">
-            Launches countdown and synchronizes puzzle to all connected players.
-          </span>
+          {players.length < 2 ? (
+            <div className="space-y-2">
+              <button
+                type="button"
+                disabled
+                className="w-full py-4 rounded-[18px] bg-black/[0.06] dark:bg-white/[0.08] text-[#1E2233]/40 dark:text-[#F3F4FA]/40 font-bold text-sm sm:text-base border border-black/[0.06] dark:border-white/[0.06] flex items-center justify-center gap-2 cursor-not-allowed select-none"
+              >
+                <Users className="w-5 h-5 opacity-40" />
+                <span>Waiting for Opponents to Join (Min 2)...</span>
+              </button>
+              <span className="text-xs text-center text-[#5B6CFF] dark:text-[#7C8CFF] font-medium block">
+                Share room code <span className="font-mono font-bold tracking-wider">{roomCode}</span> with a friend to start the duel!
+              </span>
+            </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onStartMatch}
+                className="w-full py-4 rounded-[18px] bg-gradient-to-r from-[#5B6CFF] to-[#7C8CFF] hover:opacity-95 text-white font-black text-base shadow-lg shadow-[#5B6CFF]/30 active:scale-98 transition flex items-center justify-center gap-2 cursor-pointer animate-pulse"
+              >
+                <Play className="w-5 h-5 fill-white" />
+                <span>Start Match Now ({players.length} Players Ready!)</span>
+              </button>
+              <span className="text-xs text-center text-[#1E2233]/50 dark:text-[#F3F4FA]/50 block">
+                Launches countdown and synchronizes puzzle to all connected players.
+              </span>
+            </>
+          )}
         </div>
       ) : (
         <div className="p-4 rounded-[18px] bg-[#5B6CFF]/10 dark:bg-[#5B6CFF]/15 border border-[#5B6CFF]/20 flex items-center gap-3 text-center">

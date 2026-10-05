@@ -1212,8 +1212,10 @@ export class P2PRoomService {
       cellsPerMinute?: number;
     }
   ) {
+    const totalGivens = this.puzzle?.givens.filter((v) => v !== 0).length ?? 0;
+    const targetToFill = 81 - totalGivens;
     this.sendProgressUpdate({
-      filledCount: Math.round(progress * 81),
+      filledCount: Math.round(progress * (targetToFill > 0 ? targetToFill : 81)),
       progressPercent: progress,
       score: Math.round(progress * 1000),
       lives: Math.max(0, 3 - mistakes),

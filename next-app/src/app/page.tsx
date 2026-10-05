@@ -125,6 +125,7 @@ export default function SudokuApp() {
     lastDelta,
     waveAnimation,
     shakeAnimation,
+    conflictHighlight,
   } = useSudokuGame(difficulty, mistakeRule);
 
   // Sync client storage and settings after hydration
@@ -419,12 +420,13 @@ export default function SudokuApp() {
 
   // Host launches game
   const handleHostStartMatch = useCallback(() => {
+    if (players.length < 2) return;
     const puzzle = generateSudoku(difficulty);
     roomService.startGame(puzzle, mistakeRule);
     startWithPuzzle(puzzle, mistakeRule);
     setMode("multiplayer_game");
     setShowCountdown(true);
-  }, [difficulty, mistakeRule, startWithPuzzle]);
+  }, [difficulty, mistakeRule, players.length, startWithPuzzle]);
 
   // Countdown completed -> remove countdown overlay
   const handleCountdownComplete = useCallback(() => {
@@ -444,13 +446,14 @@ export default function SudokuApp() {
 
   // Host launches rematch with newly generated puzzle
   const handleHostRematch = useCallback(() => {
+    if (players.length < 2) return;
     const newPuzzle = generateSudoku(difficulty);
     roomService.startRematch(newPuzzle);
     startWithPuzzle(newPuzzle, mistakeRule);
     setIsSpectating(false);
     setMode("multiplayer_game");
     setShowCountdown(true);
-  }, [difficulty, mistakeRule, startWithPuzzle]);
+  }, [difficulty, mistakeRule, players.length, startWithPuzzle]);
 
   // Host returns everyone to lobby to adjust settings
   const handleReturnToLobby = useCallback(() => {
@@ -466,19 +469,24 @@ export default function SudokuApp() {
     setMode("home");
   }, [handleLeaveRoom]);
 
-  // Synchronize player progress to room peers
+  // Synchronize player progress to room peers (starts at 0% based on remaining empty cells)
   useEffect(() => {
     if (mode === "multiplayer_game" && gameState.puzzle) {
-      const totalCells = 81;
-      const filledCorrect = gameState.board.filter(
-        (cell, idx) => cell !== 0 && cell === gameState.puzzle!.solution[idx]
-      ).length;
-      const progress = totalCells > 0 ? filledCorrect / totalCells : 0;
-      const totalAttempts = filledCorrect + gameState.mistakes;
-      const accuracyPercent = totalAttempts > 0 ? Math.round((filledCorrect / totalAttempts) * 100) : 100;
+      const puzzle = gameState.puzzle;
+      const totalGivens = puzzle.givens.filter((v) => v !== 0).length;
+      const targetToFill = 81 - totalGivens;
+      let correctFilled = 0;
+      for (let i = 0; i < 81; i++) {
+        if (puzzle.givens[i] === 0 && gameState.board[i] !== 0 && gameState.board[i] === puzzle.solution[i]) {
+          correctFilled++;
+        }
+      }
+      const progress = targetToFill > 0 ? Math.min(1, Math.max(0, correctFilled / targetToFill)) : 0;
+      const totalAttempts = correctFilled + gameState.mistakes;
+      const accuracyPercent = totalAttempts > 0 ? Math.round((correctFilled / totalAttempts) * 100) : 100;
       const cellsPerMinute =
         gameState.elapsedSeconds > 0
-          ? Math.round((filledCorrect / (gameState.elapsedSeconds / 60)) * 10) / 10
+          ? Math.round((correctFilled / (gameState.elapsedSeconds / 60)) * 10) / 10
           : 0;
 
       roomService.broadcastProgress(
@@ -697,25 +705,23 @@ export default function SudokuApp() {
           allDefeated={postGameAllDefeated}
           myStats={{
             timeFormatted,
-            accuracyPercent:
-              gameState.board.filter((c, i) => c !== 0 && c === gameState.puzzle?.solution[i]).length +
-                gameState.mistakes >
-              0
-                ? Math.round(
-                    (gameState.board.filter((c, i) => c !== 0 && c === gameState.puzzle?.solution[i]).length /
-                      (gameState.board.filter((c, i) => c !== 0 && c === gameState.puzzle?.solution[i]).length +
-                        gameState.mistakes)) *
-                      100
-                  )
-                : 100,
-            cellsPerMinute:
-              gameState.elapsedSeconds > 0
-                ? Math.round(
-                    (gameState.board.filter((c, i) => c !== 0 && c === gameState.puzzle?.solution[i]).length /
-                      (gameState.elapsedSeconds / 60)) *
-                      10
-                  ) / 10
-                : 0,
+            accuracyPercent: (() => {
+              const puzzle = gameState.puzzle;
+              const correctFilled = puzzle
+                ? gameState.board.filter((c, i) => puzzle.givens[i] === 0 && c !== 0 && c === puzzle.solution[i]).length
+                : 0;
+              const totalAttempts = correctFilled + gameState.mistakes;
+              return totalAttempts > 0 ? Math.round((correctFilled / totalAttempts) * 100) : 100;
+            })(),
+            cellsPerMinute: (() => {
+              const puzzle = gameState.puzzle;
+              const correctFilled = puzzle
+                ? gameState.board.filter((c, i) => puzzle.givens[i] === 0 && c !== 0 && c === puzzle.solution[i]).length
+                : 0;
+              return gameState.elapsedSeconds > 0
+                ? Math.round((correctFilled / (gameState.elapsedSeconds / 60)) * 10) / 10
+                : 0;
+            })(),
             mistakes: gameState.mistakes,
             lives: gameState.lives,
             isCompleted: gameState.isFinished,
@@ -981,6 +987,7 @@ export default function SudokuApp() {
                     isDarkMode={isDarkMode}
                     waveAnimation={waveAnimation}
                     shakeAnimation={shakeAnimation}
+                    conflictHighlight={conflictHighlight}
                   />
                 </div>
 
@@ -1030,6 +1037,7 @@ export default function SudokuApp() {
                     isDarkMode={isDarkMode}
                     waveAnimation={waveAnimation}
                     shakeAnimation={shakeAnimation}
+                    conflictHighlight={conflictHighlight}
                   />
                 </div>
 
