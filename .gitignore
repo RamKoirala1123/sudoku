@@ -10,3 +10,7 @@ pubspec.lock
 
 # FVM Version Cache
 .fvm/
+
+# Flutter build / Vercel
+_flutter/
+.vercel/

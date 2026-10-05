@@ -63,10 +63,10 @@ void main() {
 
     test('harder difficulties produce fewer or equal given cells than easier ones', () {
       final easy = SudokuGenerator.generate(
-        GenerationRequest(difficulty: Difficulty.easy, randomSeed: 7),
+        const GenerationRequest(difficulty: Difficulty.easy, randomSeed: 7),
       );
       final extreme = SudokuGenerator.generate(
-        GenerationRequest(difficulty: Difficulty.extreme, randomSeed: 7),
+        const GenerationRequest(difficulty: Difficulty.extreme, randomSeed: 7),
       );
       expect(extreme.givenCount, lessThanOrEqualTo(easy.givenCount));
     });

@@ -9,6 +9,7 @@ class NumberPadWidget extends StatelessWidget {
   final VoidCallback onErase;
   final Map<int, int> remainingCounts; // value -> cells left to place
   final bool enabled;
+  final bool isGrid;
 
   const NumberPadWidget({
     super.key,
@@ -16,81 +17,90 @@ class NumberPadWidget extends StatelessWidget {
     required this.onErase,
     required this.remainingCounts,
     this.enabled = true,
+    this.isGrid = false,
   });
+
+  Widget _buildNumberButton(BuildContext context, int number) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final remaining = remainingCounts[number] ?? 1;
+    final isExhausted = remaining <= 0;
+
+    return Material(
+      color: isExhausted
+          ? colorScheme.surface.withValues(alpha: 0.4)
+          : colorScheme.surface,
+      borderRadius: BorderRadius.circular(10),
+      elevation: 0,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: (enabled && !isExhausted) ? () => onNumberTap(number) : null,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: colorScheme.onSurface.withValues(alpha: 0.1),
+            ),
+          ),
+          alignment: Alignment.center,
+          padding: EdgeInsets.symmetric(vertical: isGrid ? 8 : 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '$number',
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: isGrid ? 28 : 22,
+                  color: isExhausted
+                      ? colorScheme.onSurface.withValues(alpha: 0.3)
+                      : colorScheme.primary,
+                ),
+              ),
+              Text(
+                '$remaining',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: 10,
+                  color: isExhausted
+                      ? colorScheme.onSurface.withValues(alpha: 0.3)
+                      : colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Column(
-      children: [
-        Row(
-          children: List.generate(9, (i) {
-            final number = i + 1;
-            final remaining = remainingCounts[number] ?? 1;
-            final isExhausted = remaining <= 0;
-            return Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: Material(
-                  color: isExhausted
-                      ? colorScheme.surface.withOpacity(0.4)
-                      : colorScheme.surface,
-                  borderRadius: BorderRadius.circular(8),
-                  elevation: 0,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: (enabled && !isExhausted)
-                        ? () => onNumberTap(number)
-                        : null,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: colorScheme.onSurface.withOpacity(0.08),
-                        ),
-                      ),
-                      alignment: Alignment.center,
-                      child: Column(
-                        children: [
-                          const SizedBox(height: 4),
-                          Text(
-                            '$number',
-                            style: theme.textTheme.headlineMedium?.copyWith(
-                              color: isExhausted
-                                  ? colorScheme.onSurface.withOpacity(0.3)
-                                  : colorScheme.primary,
-                            ),
-                          ),
-                          Text(
-                            '$remaining',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: isExhausted
-                                  ? colorScheme.onSurface.withOpacity(0.3)
-                                  : colorScheme.onSurface,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }),
+    if (isGrid) {
+      return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+          childAspectRatio: 1.25,
         ),
-        // const SizedBox(height: 10),
-        // SizedBox(
-        //   width: double.infinity,
-        //   child: OutlinedButton.icon(
-        //     onPressed: enabled ? onErase : null,
-        //     icon: const Icon(Icons.backspace_outlined, size: 18),
-        //     label: const Text('Erase'),
-        //   ),
-        // ),
-      ],
+        itemCount: 9,
+        itemBuilder: (context, i) => _buildNumberButton(context, i + 1),
+      );
+    }
+
+    return Row(
+      children: List.generate(9, (i) {
+        final number = i + 1;
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: _buildNumberButton(context, number),
+          ),
+        );
+      }),
     );
   }
 }

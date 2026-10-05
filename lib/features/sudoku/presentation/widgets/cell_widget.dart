@@ -75,114 +75,122 @@ class CellWidget extends StatelessWidget {
       child: Container(
         color: _backgroundColor,
         alignment: Alignment.center,
-        child: state.value == 0
-            ? Padding(
-                padding: const EdgeInsets.all(4.0),
-                child: LayoutBuilder(builder: (context, constraints) {
-                  final txtStyle =
-                      Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: palette.playerText.withOpacity(0.9),
-                            fontSize: 10,
-                          );
-                  return Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(3, (r) {
-                      return Expanded(
-                        child: Row(
-                          children: List.generate(3, (c) {
-                            final number = r * 3 + c + 1;
-                            final show = state.candidates.contains(number);
-                            return Expanded(
-                              child: Center(
-                                child: show
-                                    ? Text(
-                                        '$number',
-                                        style: txtStyle,
-                                      )
-                                    : const SizedBox.shrink(),
-                              ),
-                            );
-                          }),
-                        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final cellSize = math.min(constraints.maxWidth, constraints.maxHeight);
+            final numberFontSize = (cellSize * 0.48).clamp(16.0, 32.0);
+            final candidateFontSize = (cellSize * 0.20).clamp(7.0, 11.0);
+
+            if (state.value == 0) {
+              final txtStyle =
+                  Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: palette.playerText.withValues(alpha: 0.9),
+                        fontSize: candidateFontSize,
+                        fontWeight: FontWeight.w400,
                       );
-                    }),
-                  );
-                }),
-              )
-            : Stack(
-                alignment: Alignment.center,
-                children: [
-                  // colored flowing box overlay
-                  if (highlightAnimation != null)
-                    AnimatedBuilder(
-                      animation: highlightAnimation!,
-                      builder: (context, child) {
-                        final raw = highlightAnimation!.value.clamp(0.0, 1.0);
-                        final dir = highlightDirection ?? Offset.zero;
-                        double v;
-                        if (highlightIsError) {
-                          final angle = raw * _errorPulseCount * 2 * math.pi;
-                          final s = 0.5 * (1 + math.sin(angle));
-                          // sharpen peaks so each flash is distinct
-                          v = math.pow(s, 5).toDouble();
-                        } else {
-                          v = raw;
-                        }
-                        // Subtle flowing overlay: translate from trigger,
-                        // but keep scaling/opacity minimal so the effect
-                        // reads as a color flow rather than an explosion.
-                        final translate = Offset(
-                            -dir.dx * (1 - v) * 28, -dir.dy * (1 - v) * 28);
+              return Padding(
+                padding: const EdgeInsets.all(3.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(3, (r) {
+                    return Expanded(
+                      child: Row(
+                        children: List.generate(3, (c) {
+                          final number = r * 3 + c + 1;
+                          final show = state.candidates.contains(number);
+                          return Expanded(
+                            child: Center(
+                              child: show
+                                  ? Text(
+                                      '$number',
+                                      style: txtStyle,
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                          );
+                        }),
+                      ),
+                    );
+                  }),
+                ),
+              );
+            }
 
-                        final overlayColor = highlightIsError
-                            ? palette.errorCell.withOpacity(0.95)
-                            : palette.selectedCell.withOpacity(0.9);
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                // colored flowing box overlay
+                if (highlightAnimation != null)
+                  AnimatedBuilder(
+                    animation: highlightAnimation!,
+                    builder: (context, child) {
+                      final raw = highlightAnimation!.value.clamp(0.0, 1.0);
+                      final dir = highlightDirection ?? Offset.zero;
+                      double v;
+                      if (highlightIsError) {
+                        final angle = raw * _errorPulseCount * 2 * math.pi;
+                        final s = 0.5 * (1 + math.sin(angle));
+                        // sharpen peaks so each flash is distinct
+                        v = math.pow(s, 5).toDouble();
+                      } else {
+                        v = raw;
+                      }
+                      // Subtle flowing overlay: translate from trigger,
+                      // but keep scaling/opacity minimal so the effect
+                      // reads as a color flow rather than an explosion.
+                      final translate = Offset(
+                          -dir.dx * (1 - v) * 28, -dir.dy * (1 - v) * 28);
 
-                        return Opacity(
-                          opacity: (highlightIsError ? 0.9 : 0.6) * v,
-                          child: Transform.translate(
-                            offset: translate,
-                            child: Transform.scale(
-                              scale: 0.92 + 0.08 * v,
-                              child: Container(
-                                width: double.infinity,
-                                height: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: overlayColor,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: (highlightIsError
-                                              ? palette.errorCell
-                                              : palette.selectedCell)
-                                          .withOpacity(0.25 * v),
-                                      blurRadius: 6.0 + 6.0 * v,
-                                      spreadRadius: 0.25 * v,
-                                    ),
-                                  ],
-                                ),
+                      final overlayColor = highlightIsError
+                          ? palette.errorCell.withValues(alpha: 0.95)
+                          : palette.selectedCell.withValues(alpha: 0.9);
+
+                      return Opacity(
+                        opacity: (highlightIsError ? 0.9 : 0.6) * v,
+                        child: Transform.translate(
+                          offset: translate,
+                          child: Transform.scale(
+                            scale: 0.92 + 0.08 * v,
+                            child: Container(
+                              width: double.infinity,
+                              height: double.infinity,
+                              decoration: BoxDecoration(
+                                color: overlayColor,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: (highlightIsError
+                                            ? palette.errorCell
+                                            : palette.selectedCell)
+                                        .withValues(alpha: 0.25 * v),
+                                    blurRadius: 6.0 + 6.0 * v,
+                                    spreadRadius: 0.25 * v,
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      );
+                    },
+                  ),
 
-                  _buildAnimatedNumber(
-                    Text(
-                      '${state.value}',
-                      key: ValueKey(
-                        '${state.value}-${state.isIncorrect}',
-                      ),
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight:
-                            state.isGiven ? FontWeight.w700 : FontWeight.w600,
-                        color: textColor,
-                      ),
+                _buildAnimatedNumber(
+                  Text(
+                    '${state.value}',
+                    key: ValueKey(
+                      '${state.value}-${state.isIncorrect}',
+                    ),
+                    style: TextStyle(
+                      fontSize: numberFontSize,
+                      fontWeight: FontWeight.w400,
+                      color: textColor,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -204,7 +212,7 @@ class CellWidget extends StatelessWidget {
         } else {
           v = raw;
         }
-        final op = (0.7 + 0.25 * v).clamp(0.0, 1.0) as double;
+        final op = (0.7 + 0.25 * v).clamp(0.0, 1.0);
         return Opacity(
           opacity: op,
           child: Transform.scale(

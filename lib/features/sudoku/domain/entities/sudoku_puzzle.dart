@@ -24,4 +24,21 @@ class SudokuPuzzle {
 
   int get givenCount => givens.where((v) => v != 0).length;
   int get emptyCount => 81 - givenCount;
+
+  Map<String, dynamic> toJson() => {
+        'givens': givens,
+        'solution': solution,
+        'difficulty': difficulty.name,
+        'seed': seed,
+      };
+
+  factory SudokuPuzzle.fromJson(Map<String, dynamic> json) => SudokuPuzzle(
+        givens: List<int>.from(json['givens'] as List),
+        solution: List<int>.from(json['solution'] as List),
+        difficulty: Difficulty.values.firstWhere(
+          (d) => d.name == json['difficulty'],
+          orElse: () => Difficulty.medium,
+        ),
+        seed: json['seed'] as String? ?? '',
+      );
 }

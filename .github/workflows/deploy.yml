@@ -1,0 +1,46 @@
+name: Deploy Flutter Web to Vercel
+
+on:
+  push:
+    branches:
+      - multiplayer
+      - main
+  pull_request:
+    branches:
+      - multiplayer
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Run Tests
+        run: flutter test
+
+      - name: Build Web Release
+        run: flutter build web --release --no-tree-shake-icons
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        if: github.event_name == 'push' && env.VERCEL_TOKEN != ''
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: ${{ github.ref == 'refs/heads/multiplayer' && '--prod' || '' }}
+          working-directory: ./build/web
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
