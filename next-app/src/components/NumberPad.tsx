@@ -11,6 +11,10 @@ interface NumberPadProps {
   onErase: () => void;
   onUndo: () => void;
   disabled?: boolean;
+  isGrid?: boolean;
+  isDarkMode?: boolean;
+  showToolbar?: boolean;
+  toolbarOrder?: "undo-erase-pencil" | "undo-pencil-erase";
 }
 
 export const NumberPad: React.FC<NumberPadProps> = ({
@@ -21,6 +25,10 @@ export const NumberPad: React.FC<NumberPadProps> = ({
   onErase,
   onUndo,
   disabled = false,
+  isGrid = false,
+  isDarkMode = false,
+  showToolbar = true,
+  toolbarOrder = "undo-erase-pencil",
 }) => {
   // Keyboard listener for 1-9, Backspace, N, Z
   useEffect(() => {
@@ -48,99 +56,195 @@ export const NumberPad: React.FC<NumberPadProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [disabled, remainingCounts, onInputNumber, onErase, onToggleNotes, onUndo]);
 
+  const primaryColor = isDarkMode ? "#7C8CFF" : "#5B6CFF";
+  const surfaceColor = isDarkMode ? "#1B1E29" : "#FFFFFF";
+  const textColor = isDarkMode ? "#F3F4FA" : "#1E2233";
+  const borderColor = isDarkMode ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)";
+
+  const renderToolbar = () => {
+    const undoBtn = (
+      <button
+        key="undo"
+        type="button"
+        onClick={onUndo}
+        disabled={disabled}
+        className="flex flex-col items-center justify-center px-4 py-1.5 rounded-lg active:scale-95 transition disabled:opacity-40 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5"
+        style={{ color: textColor }}
+        title="Undo (Ctrl+Z)"
+      >
+        <Undo2 className="w-5 h-5 mb-1" />
+        <span className="text-xs font-normal">Undo</span>
+      </button>
+    );
+
+    const eraseBtn = (
+      <button
+        key="erase"
+        type="button"
+        onClick={onErase}
+        disabled={disabled}
+        className="flex flex-col items-center justify-center px-4 py-1.5 rounded-lg active:scale-95 transition disabled:opacity-40 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5"
+        style={{ color: textColor }}
+        title="Erase (Backspace)"
+      >
+        <Sparkles className="w-5 h-5 mb-1" />
+        <span className="text-xs font-normal">Erase</span>
+      </button>
+    );
+
+    const pencilBtn = (
+      <button
+        key="pencil"
+        type="button"
+        onClick={onToggleNotes}
+        disabled={disabled}
+        className="flex flex-col items-center justify-center px-4 py-1.5 rounded-lg active:scale-95 transition disabled:opacity-40 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5"
+        style={{ color: isNotesMode ? primaryColor : textColor }}
+        title="Pencil Mode (N)"
+      >
+        <Edit3 className="w-5 h-5 mb-1" />
+        <span className="text-xs font-medium">
+          {isNotesMode ? "Pencil ON" : "Pencil"}
+        </span>
+      </button>
+    );
+
+    if (toolbarOrder === "undo-pencil-erase") {
+      return (
+        <div className="flex items-center justify-around py-2 mb-3">
+          {undoBtn}
+          {pencilBtn}
+          {eraseBtn}
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center justify-around py-2 mb-3">
+        {undoBtn}
+        {eraseBtn}
+        {pencilBtn}
+      </div>
+    );
+  };
+
   return (
-    <div className="w-full max-w-[490px] mx-auto px-2 mt-2 select-none">
-      {/* Flutter IconLabelButton Toolbar: Undo, Erase, Pencil */}
-      <div className="flex items-center justify-around py-2 mb-2">
-        {/* Undo */}
-        <button
-          type="button"
-          onClick={onUndo}
-          disabled={disabled}
-          className="flex flex-col items-center justify-center px-4 py-1.5 rounded-lg text-[#1E2233] dark:text-[#F3F4FA] hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition disabled:opacity-40"
-          title="Undo (Ctrl+Z)"
-        >
-          <Undo2 className="w-5 h-5 mb-1 text-[#1E2233] dark:text-[#F3F4FA]" />
-          <span className="text-xs font-normal">Undo</span>
-        </button>
+    <div className="w-full select-none">
+      {/* Flutter IconLabelButton Toolbar */}
+      {showToolbar && renderToolbar()}
 
-        {/* Erase */}
-        <button
-          type="button"
-          onClick={onErase}
-          disabled={disabled}
-          className="flex flex-col items-center justify-center px-4 py-1.5 rounded-lg text-[#1E2233] dark:text-[#F3F4FA] hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition disabled:opacity-40"
-          title="Erase (Backspace)"
-        >
-          <Sparkles className="w-5 h-5 mb-1 text-[#1E2233] dark:text-[#F3F4FA]" />
-          <span className="text-xs font-normal">Erase</span>
-        </button>
+      {/* Number Pad Grid or Row */}
+      {isGrid ? (
+        /* Flutter 3x3 Keypad (widescreen) */
+        <div className="grid grid-cols-3 gap-2.5 max-w-[290px] mx-auto">
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => {
+            const remaining = remainingCounts[num] ?? 9;
+            const isExhausted = remaining <= 0;
 
-        {/* Pencil / Notes */}
-        <button
-          type="button"
-          onClick={onToggleNotes}
-          disabled={disabled}
-          className="flex flex-col items-center justify-center px-4 py-1.5 rounded-lg active:scale-95 transition disabled:opacity-40"
-          title="Pencil Mode (N)"
-        >
-          <Edit3
-            className={`w-5 h-5 mb-1 transition-colors ${
-              isNotesMode ? "text-[#5B6CFF] dark:text-[#7C8CFF]" : "text-[#1E2233] dark:text-[#F3F4FA]"
-            }`}
-          />
-          <span
-            className={`text-xs font-medium transition-colors ${
-              isNotesMode ? "text-[#5B6CFF] dark:text-[#7C8CFF] font-bold" : "text-[#1E2233] dark:text-[#F3F4FA]"
-            }`}
-          >
-            {isNotesMode ? "Pencil ON" : "Pencil"}
-          </span>
-        </button>
-      </div>
-
-      {/* Flutter NumberPadWidget 1-9 Row */}
-      <div className="grid grid-cols-9 gap-1 sm:gap-1.5">
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => {
-          const remaining = remainingCounts[num] ?? 9;
-          const isExhausted = remaining <= 0;
-
-          return (
-            <button
-              key={num}
-              type="button"
-              disabled={disabled || isExhausted}
-              onClick={() => onInputNumber(num)}
-              className={`flex flex-col items-center justify-center h-14 sm:h-16 rounded-[10px] transition-all duration-100 border active:scale-90 ${
-                isExhausted
-                  ? "bg-white/40 dark:bg-[#1B1E29]/40 border-black/5 dark:border-white/5 opacity-30 pointer-events-none"
-                  : "bg-white dark:bg-[#1B1E29] border-black/10 dark:border-white/10 hover:border-[#5B6CFF] dark:hover:border-[#7C8CFF] active:bg-[#5B6CFF]/10 shadow-xs"
-              }`}
-            >
-              {/* Flutter Number TextStyle: bold, 22px, AppColors.primary */}
-              <span
-                className={`text-[22px] font-bold leading-none mb-0.5 ${
-                  isExhausted
-                    ? "text-[#1E2233]/30 dark:text-[#F3F4FA]/30"
-                    : "text-[#5B6CFF] dark:text-[#7C8CFF]"
+            return (
+              <button
+                key={num}
+                type="button"
+                disabled={disabled || isExhausted}
+                onClick={() => onInputNumber(num)}
+                style={{
+                  backgroundColor: isExhausted
+                    ? isDarkMode
+                      ? "rgba(27, 30, 41, 0.4)"
+                      : "rgba(255, 255, 255, 0.4)"
+                    : surfaceColor,
+                  borderColor: borderColor,
+                }}
+                className={`flex flex-col items-center justify-center h-20 rounded-[12px] border active:scale-95 transition-all cursor-pointer ${
+                  isExhausted ? "opacity-30 pointer-events-none" : "hover:border-[#5B6CFF] shadow-xs"
                 }`}
               >
-                {num}
-              </span>
-              {/* Remaining count: 10px, onSurface 0.7 */}
-              <span
-                className={`text-[10px] leading-none ${
-                  isExhausted
-                    ? "text-[#1E2233]/30 dark:text-[#F3F4FA]/30"
-                    : "text-[#1E2233]/70 dark:text-[#F3F4FA]/70"
+                <span
+                  style={{
+                    color: isExhausted
+                      ? isDarkMode
+                        ? "rgba(243, 244, 250, 0.3)"
+                        : "rgba(30, 34, 51, 0.3)"
+                      : primaryColor,
+                  }}
+                  className="text-[28px] font-bold leading-none mb-1"
+                >
+                  {num}
+                </span>
+                <span
+                  style={{
+                    color: isExhausted
+                      ? isDarkMode
+                        ? "rgba(243, 244, 250, 0.3)"
+                        : "rgba(30, 34, 51, 0.3)"
+                      : isDarkMode
+                      ? "rgba(243, 244, 250, 0.7)"
+                      : "rgba(30, 34, 51, 0.7)",
+                  }}
+                  className="text-[11px] leading-none"
+                >
+                  {remaining}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        /* Flutter 1-row NumberPad (mobile) */
+        <div className="grid grid-cols-9 gap-1 sm:gap-1.5 max-w-[490px] mx-auto">
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => {
+            const remaining = remainingCounts[num] ?? 9;
+            const isExhausted = remaining <= 0;
+
+            return (
+              <button
+                key={num}
+                type="button"
+                disabled={disabled || isExhausted}
+                onClick={() => onInputNumber(num)}
+                style={{
+                  backgroundColor: isExhausted
+                    ? isDarkMode
+                      ? "rgba(27, 30, 41, 0.4)"
+                      : "rgba(255, 255, 255, 0.4)"
+                    : surfaceColor,
+                  borderColor: borderColor,
+                }}
+                className={`flex flex-col items-center justify-center h-14 sm:h-16 rounded-[10px] border active:scale-90 transition-all cursor-pointer ${
+                  isExhausted ? "opacity-30 pointer-events-none" : "hover:border-[#5B6CFF] shadow-xs"
                 }`}
               >
-                {remaining}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+                <span
+                  style={{
+                    color: isExhausted
+                      ? isDarkMode
+                        ? "rgba(243, 244, 250, 0.3)"
+                        : "rgba(30, 34, 51, 0.3)"
+                      : primaryColor,
+                  }}
+                  className="text-[22px] font-bold leading-none mb-0.5"
+                >
+                  {num}
+                </span>
+                <span
+                  style={{
+                    color: isExhausted
+                      ? isDarkMode
+                        ? "rgba(243, 244, 250, 0.3)"
+                        : "rgba(30, 34, 51, 0.3)"
+                      : isDarkMode
+                      ? "rgba(243, 244, 250, 0.7)"
+                      : "rgba(30, 34, 51, 0.7)",
+                  }}
+                  className="text-[10px] leading-none"
+                >
+                  {remaining}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

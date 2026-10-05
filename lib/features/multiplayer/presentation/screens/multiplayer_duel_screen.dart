@@ -377,7 +377,7 @@ class _MultiplayerDuelScreenState extends State<MultiplayerDuelScreen> {
   }
 
   Widget _buildQuickReactionsBar() {
-    final emojis = ['🔥', '👏', '⚡', '🤯', '😎', '🎯'];
+    final emojis = ["🔥", "👏", "🤯", "😎", "😱", "💀"];
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,

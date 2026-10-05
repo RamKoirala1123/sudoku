@@ -7,17 +7,23 @@ import { PlayerProgress } from "@/lib/types";
 interface RaceLeaderboardProps {
   players: PlayerProgress[];
   myId: string;
-  onSendEmoji: (emoji: string) => void;
+  onSendEmoji?: (emoji: string) => void;
   latencyMs?: number;
+  className?: string;
+  showReactions?: boolean;
+  compact?: boolean;
 }
 
-const EMOJI_LIST = ["🔥", "🚀", "😎", "👏", "😱", "😭", "🤯", "💀"];
+const EMOJI_LIST = ["🔥", "👏", "🤯", "😎", "😱", "💀"];
 
 export const RaceLeaderboard: React.FC<RaceLeaderboardProps> = ({
   players,
   myId,
   onSendEmoji,
   latencyMs,
+  className = "",
+  showReactions = false,
+  compact = false,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -37,7 +43,7 @@ export const RaceLeaderboard: React.FC<RaceLeaderboardProps> = ({
     (sortedPlayers.length > 0 ? sortedPlayers[0] : null);
 
   const displayedPlayers =
-    isExpanded || sortedPlayers.length <= 3
+    isExpanded || sortedPlayers.length <= 4 || compact
       ? sortedPlayers
       : sortedPlayers.slice(0, 3);
 
@@ -46,33 +52,35 @@ export const RaceLeaderboard: React.FC<RaceLeaderboardProps> = ({
     : 1;
 
   return (
-    <div className="w-full max-w-[490px] mx-auto px-2 mt-2 select-none">
-      {/* Flutter MultiplayerRaceLeaderboardWidget container */}
-      <div className="bg-[#F1F3FA] dark:bg-[#1E2233] p-3 rounded-[16px] border border-black/[0.06] dark:border-white/[0.08] shadow-xs">
+    <div className={`w-full select-none ${className}`}>
+      {/* Leaderboard card */}
+      <div className={`bg-[#F1F3FA] dark:bg-[#1E2233] rounded-[16px] border border-black/[0.06] dark:border-white/[0.08] shadow-xs ${
+        compact ? "p-2.5" : "p-3"
+      }`}>
         {/* Header Bar */}
-        <div className="flex items-center justify-between pb-2">
-          <div className="flex items-center gap-1.5">
-            <Trophy className="w-4 h-4 text-[#5B6CFF] dark:text-[#7C8CFF]" />
-            <span className="text-xs font-bold text-[#1E2233] dark:text-[#F3F4FA]">
-              {sortedPlayers.length} Players Racing
+        <div className="flex items-center justify-between pb-2 border-b border-black/[0.04] dark:border-white/[0.04] mb-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Trophy className="w-3.5 h-3.5 text-[#5B6CFF] dark:text-[#7C8CFF] shrink-0" />
+            <span className="text-xs font-bold text-[#1E2233] dark:text-[#F3F4FA] truncate">
+              Live Race ({sortedPlayers.length})
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             {localPlayer && (
               <div
-                className="px-2 py-0.5 rounded-[10px] text-[11px] font-bold"
+                className="px-1.5 py-0.5 rounded-[8px] text-[10px] font-bold"
                 style={{
-                  backgroundColor: `${localPlayer.color || "#5B6CFF"}26`,
+                  backgroundColor: `${localPlayer.color || "#5B6CFF"}22`,
                   color: localPlayer.color || "#5B6CFF",
                 }}
               >
-                Your Rank: #{myRank}
+                #{myRank}
               </div>
             )}
 
             {latencyMs !== undefined && (
-              <div className="flex items-center gap-0.5 text-[10px] font-mono text-[#1E2233]/60 dark:text-[#F3F4FA]/60 ml-1">
+              <div className="flex items-center gap-0.5 text-[10px] font-mono text-[#1E2233]/60 dark:text-[#F3F4FA]/60">
                 <Wifi
                   className={`w-3 h-3 ${
                     latencyMs < 80
@@ -86,20 +94,20 @@ export const RaceLeaderboard: React.FC<RaceLeaderboardProps> = ({
               </div>
             )}
 
-            {sortedPlayers.length > 3 && (
+            {!compact && sortedPlayers.length > 3 && (
               <button
                 type="button"
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="p-0.5 text-[#1E2233]/60 dark:text-[#F3F4FA]/60 hover:text-[#1E2233]"
+                className="p-0.5 text-[#1E2233]/60 dark:text-[#F3F4FA]/60 hover:text-[#1E2233] cursor-pointer"
               >
-                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </button>
             )}
           </div>
         </div>
 
         {/* Players Progress Cards */}
-        <div className="space-y-1.5">
+        <div className={`space-y-1.5 ${compact ? "max-h-[160px] overflow-y-auto no-scrollbar" : ""}`}>
           {displayedPlayers.map((p, idx) => {
             const isMe = p.id === myId;
             const prog = p.progress ?? p.progressPercent ?? 0;
@@ -109,7 +117,7 @@ export const RaceLeaderboard: React.FC<RaceLeaderboardProps> = ({
             return (
               <div
                 key={p.id}
-                className={`p-2 rounded-[12px] transition-all ${
+                className={`p-1.5 sm:p-2 rounded-[12px] transition-all ${
                   isMe
                     ? "bg-white dark:bg-[#1B1E29] shadow-xs border border-[#5B6CFF]/30 dark:border-[#7C8CFF]/30"
                     : "bg-white/60 dark:bg-[#1B1E29]/60 border border-black/[0.04] dark:border-white/[0.04]"
@@ -117,37 +125,37 @@ export const RaceLeaderboard: React.FC<RaceLeaderboardProps> = ({
               >
                 {/* Row info */}
                 <div className="flex items-center justify-between text-xs mb-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-mono text-[10px] w-4 text-[#1E2233]/50 dark:text-[#F3F4FA]/50 font-bold">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-mono text-[10px] w-3 text-[#1E2233]/50 dark:text-[#F3F4FA]/50 font-bold shrink-0">
                       #{idx + 1}
                     </span>
                     <div
-                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                      className="w-2 h-2 rounded-full shrink-0"
                       style={{ backgroundColor: playerColor }}
                     />
-                    <span className="font-medium text-[#1E2233] dark:text-[#F3F4FA] truncate max-w-[130px] sm:max-w-[180px]">
+                    <span className="font-medium text-[#1E2233] dark:text-[#F3F4FA] truncate max-w-[100px] sm:max-w-[130px]">
                       {p.name} {isMe ? "(You)" : ""}
                     </span>
                     {p.isHost && (
-                      <Crown className="w-3 h-3 text-[#FFC24B] flex-shrink-0" />
+                      <Crown className="w-2.5 h-2.5 text-[#FFC24B] shrink-0" />
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    {p.isKnockedOut ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#FF5D6C] bg-[#FF5D6C]/10 px-1.5 py-0.5 rounded">
-                        <Skull className="w-3 h-3" /> Knocked Out
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {p.isKnockedOut || p.isDefeated ? (
+                      <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-[#FF5D6C] bg-[#FF5D6C]/10 px-1 py-0.2 rounded">
+                        <Skull className="w-2.5 h-2.5" /> Out
                       </span>
-                    ) : p.isFinished ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#3DDC97] bg-[#3DDC97]/10 px-1.5 py-0.5 rounded">
-                        <CheckCircle2 className="w-3 h-3" /> Finished
+                    ) : p.isFinished || p.isCompleted ? (
+                      <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-[#3DDC97] bg-[#3DDC97]/10 px-1 py-0.2 rounded">
+                        <CheckCircle2 className="w-2.5 h-2.5" /> Won
                       </span>
                     ) : (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-[#1E2233]/50 dark:text-[#F3F4FA]/50">
-                          {p.mistakes} ❌
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] text-[#1E2233]/50 dark:text-[#F3F4FA]/50">
+                          {p.mistakes}❌
                         </span>
-                        <span className="font-mono font-bold text-[#1E2233] dark:text-[#F3F4FA]">
+                        <span className="font-mono font-bold text-[11px] text-[#1E2233] dark:text-[#F3F4FA]">
                           {percent}%
                         </span>
                       </div>
@@ -161,7 +169,7 @@ export const RaceLeaderboard: React.FC<RaceLeaderboardProps> = ({
                     className="h-full rounded-full transition-all duration-300 ease-out"
                     style={{
                       width: `${percent}%`,
-                      backgroundColor: p.isKnockedOut ? "#FF5D6C" : playerColor,
+                      backgroundColor: (p.isKnockedOut || p.isDefeated) ? "#FF5D6C" : playerColor,
                     }}
                   />
                 </div>
@@ -170,24 +178,26 @@ export const RaceLeaderboard: React.FC<RaceLeaderboardProps> = ({
           })}
         </div>
 
-        {/* Floating Emoji Picker Bar */}
-        <div className="mt-2 pt-2 border-t border-black/[0.05] dark:border-white/[0.05] flex items-center justify-between">
-          <span className="text-[10px] font-bold text-[#1E2233]/50 dark:text-[#F3F4FA]/50 uppercase mr-1">
-            React:
-          </span>
-          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
-            {EMOJI_LIST.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => onSendEmoji(emoji)}
-                className="text-base hover:scale-125 active:scale-95 transition-transform px-1 py-0.5 rounded hover:bg-black/5 dark:hover:bg-white/5"
-              >
-                {emoji}
-              </button>
-            ))}
+        {/* Optional Floating Emoji Picker Bar */}
+        {showReactions && onSendEmoji && (
+          <div className="mt-2 pt-2 border-t border-black/[0.05] dark:border-white/[0.05] flex items-center justify-between">
+            <span className="text-[10px] font-bold text-[#1E2233]/50 dark:text-[#F3F4FA]/50 uppercase mr-1">
+              React:
+            </span>
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
+              {EMOJI_LIST.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => onSendEmoji(emoji)}
+                  className="text-base hover:scale-125 active:scale-95 transition-transform px-1 py-0.5 rounded hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

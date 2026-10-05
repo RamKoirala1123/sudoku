@@ -1,0 +1,1 @@
+also on erase dont play sound and the theme isnot saved in session or local storage so everytinme user reload the theme changes to default please fix that
