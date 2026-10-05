@@ -1,19 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
-  Trophy,
   Users,
   Play,
-  RotateCcw,
   Volume2,
   VolumeX,
   Moon,
   Sun,
-  ShieldAlert,
-  Zap,
-  HeartHandshake,
-  Sparkles,
+  ChevronRight,
+  User,
+  X,
 } from "lucide-react";
 
 import { Difficulty, MistakeRule, PlayerProgress, SudokuPuzzle } from "@/lib/types";
@@ -34,6 +31,22 @@ import { MultiplayerMenuModal } from "@/components/MultiplayerMenuModal";
 import { MultiplayerLobby } from "@/components/MultiplayerLobby";
 
 type AppMode = "home" | "solo_game" | "multiplayer_lobby" | "multiplayer_game";
+
+interface SavedSession {
+  difficulty: Difficulty;
+  mistakeRule: MistakeRule;
+  roomCode?: string;
+  isMultiplayer: boolean;
+  score: number;
+  timeFormatted: string;
+}
+
+interface PlayerStats {
+  totalGamesPlayed: number;
+  totalGamesWon: number;
+  bestTime: string;
+  bestScore: number;
+}
 
 export default function SudokuApp() {
   // Appearance & Audio state
@@ -58,6 +71,15 @@ export default function SudokuApp() {
   const [showCountdown, setShowCountdown] = useState<boolean>(false);
   const [isSpectating, setIsSpectating] = useState<boolean>(false);
 
+  // Saved Session & Stats
+  const [activeSession, setActiveSession] = useState<SavedSession | null>(null);
+  const [stats, setStats] = useState<PlayerStats>({
+    totalGamesPlayed: 0,
+    totalGamesWon: 0,
+    bestTime: "--:--",
+    bestScore: 0,
+  });
+
   // Sudoku Hook
   const {
     gameState,
@@ -72,14 +94,17 @@ export default function SudokuApp() {
     toggleNotesMode,
     remainingCounts,
     timeFormatted,
+    lastDelta,
   } = useSudokuGame(difficulty, mistakeRule);
 
-  // Load user settings on mount
+  // Load user settings, stats, and session on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       const savedTheme = localStorage.getItem("sudoku_theme");
       const savedMute = localStorage.getItem("sudoku_muted");
       const savedNick = localStorage.getItem("sudoku_nickname");
+      const savedStatsStr = localStorage.getItem("sudoku_stats");
+      const savedSessionStr = localStorage.getItem("sudoku_active_session");
 
       if (savedTheme) {
         setIsDarkMode(savedTheme === "dark");
@@ -100,6 +125,18 @@ export default function SudokuApp() {
         const randomNick = `Player${Math.floor(1000 + Math.random() * 9000)}`;
         setNickname(randomNick);
         localStorage.setItem("sudoku_nickname", randomNick);
+      }
+
+      if (savedStatsStr) {
+        try {
+          setStats(JSON.parse(savedStatsStr));
+        } catch {}
+      }
+
+      if (savedSessionStr) {
+        try {
+          setActiveSession(JSON.parse(savedSessionStr));
+        } catch {}
       }
 
       // Check URL hash for direct join (#join=123456 or #room=123456)
@@ -143,6 +180,34 @@ export default function SudokuApp() {
     setDifficulty(diff);
     startNewGame(diff, mistakeRule);
     setMode("solo_game");
+
+    // Save active session
+    const sess: SavedSession = {
+      difficulty: diff,
+      mistakeRule,
+      isMultiplayer: false,
+      score: 0,
+      timeFormatted: "00:00",
+    };
+    setActiveSession(sess);
+    localStorage.setItem("sudoku_active_session", JSON.stringify(sess));
+  };
+
+  const handleResumeSession = () => {
+    if (!activeSession) return;
+    setDifficulty(activeSession.difficulty);
+    setMistakeRule(activeSession.mistakeRule);
+    if (activeSession.isMultiplayer && activeSession.roomCode) {
+      handleJoinRoom(activeSession.roomCode);
+    } else {
+      startNewGame(activeSession.difficulty, activeSession.mistakeRule);
+      setMode("solo_game");
+    }
+  };
+
+  const handleDiscardSession = () => {
+    setActiveSession(null);
+    localStorage.removeItem("sudoku_active_session");
   };
 
   // P2P Room callbacks setup
@@ -171,7 +236,7 @@ export default function SudokuApp() {
     roomService.onLatencyUpdated = (ping) => {
       setLatencyMs(ping);
     };
-  }, [startNewGame]);
+  }, [startWithPuzzle]);
 
   // Host a room
   const handleHostRoom = async () => {
@@ -232,6 +297,23 @@ export default function SudokuApp() {
     }
   }, [mode, gameState.board, gameState.mistakes, gameState.isKnockedOut, gameState.isFinished, gameState.puzzle]);
 
+  // When game finishes, update statistics
+  useEffect(() => {
+    if (gameState.isFinished) {
+      setStats((prev) => {
+        const next: PlayerStats = {
+          totalGamesPlayed: prev.totalGamesPlayed + 1,
+          totalGamesWon: prev.totalGamesWon + 1,
+          bestTime: prev.bestTime === "--:--" ? timeFormatted : prev.bestTime,
+          bestScore: Math.max(prev.bestScore, gameState.score),
+        };
+        localStorage.setItem("sudoku_stats", JSON.stringify(next));
+        return next;
+      });
+      handleDiscardSession();
+    }
+  }, [gameState.isFinished, gameState.score, timeFormatted]);
+
   // Send emoji reaction
   const handleSendEmoji = (emoji: string) => {
     roomService.broadcastEmoji(emoji);
@@ -251,6 +333,7 @@ export default function SudokuApp() {
     window.location.hash = "";
     setMode("home");
     setIsSpectating(false);
+    handleDiscardSession();
   };
 
   const handleBackHome = () => {
@@ -262,7 +345,7 @@ export default function SudokuApp() {
   };
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-between pb-6 px-3">
+    <main className="min-h-screen flex flex-col items-center justify-start pb-6 px-3 bg-[#F6F7FB] dark:bg-[#11131A] text-[#1E2233] dark:text-[#F3F4FA] transition-colors">
       {/* Floating Emojis */}
       <FloatingEmojiOverlay emojis={floatingEmojis} />
 
@@ -327,158 +410,194 @@ export default function SudokuApp() {
         />
       )}
 
-      {/* SCREEN 1: HOME SCREEN */}
+      {/* ========================================================================= */}
+      {/* SCREEN 1: FLUTTER HOME SCREEN                                             */}
+      {/* ========================================================================= */}
       {mode === "home" && (
-        <div className="w-full max-w-md mx-auto pt-8 flex flex-col items-center">
-          {/* Top Bar for Theme & Sound */}
-          <div className="w-full flex items-center justify-between mb-6 px-2">
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-lg shadow-md shadow-indigo-500/25">
-                S
-              </div>
-              <span className="font-extrabold text-xl tracking-tight text-slate-900 dark:text-slate-100">
-                Sudoku<span className="text-indigo-600 dark:text-indigo-400">.io</span>
+        <div className="w-full max-w-[520px] mx-auto pt-6 px-3 flex flex-col animate-fadeIn">
+          {/* Header (Flutter exact: 'Sudoku' / 'Duel' in primary color) */}
+          <div className="w-full flex items-center justify-between mb-6">
+            <div className="flex flex-col">
+              <span className="text-[28px] font-extrabold tracking-tight leading-none text-[#1E2233] dark:text-[#F3F4FA]">
+                Sudoku
+              </span>
+              <span className="text-[28px] font-extrabold tracking-tight leading-none text-[#5B6CFF] dark:text-[#7C8CFF]">
+                Duel
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={handleToggleMute}
-                className="p-2.5 rounded-xl bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-xs active:scale-95"
-                title={isMuted ? "Unmute" : "Mute"}
+                className="p-2.5 rounded-full text-[#1E2233] dark:text-[#F3F4FA] hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition"
+                title={isMuted ? "Unmute Sound" : "Mute Sound"}
               >
-                {isMuted ? <VolumeX className="w-5 h-5 text-rose-500" /> : <Volume2 className="w-5 h-5 text-indigo-500" />}
+                {isMuted ? (
+                  <VolumeX className="w-[22px] h-[22px] text-[#FF5D6C]" />
+                ) : (
+                  <Volume2 className="w-[22px] h-[22px]" />
+                )}
               </button>
               <button
                 type="button"
                 onClick={handleToggleTheme}
-                className="p-2.5 rounded-xl bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-xs active:scale-95"
+                className="p-2.5 rounded-full text-[#1E2233] dark:text-[#F3F4FA] hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition"
                 title={isDarkMode ? "Light Mode" : "Dark Mode"}
               >
-                {isDarkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-indigo-500" />}
+                {isDarkMode ? (
+                  <Sun className="w-[22px] h-[22px]" />
+                ) : (
+                  <Moon className="w-[22px] h-[22px]" />
+                )}
               </button>
             </div>
           </div>
 
-          {/* Multiplayer Banner Card */}
-          <div className="w-full mb-6 p-5 rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-sky-700 text-white shadow-xl shadow-indigo-500/20 relative overflow-hidden">
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-white/20 text-white backdrop-blur-xs flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-amber-300" /> Serverless P2P WebRTC
+          {/* Active Session Resume Banner (Flutter _buildActiveSessionBanner) */}
+          {activeSession && (
+            <div className="mb-6 p-4 rounded-[16px] bg-[#5B6CFF]/10 dark:bg-[#7C8CFF]/12 border border-[#5B6CFF]/25 flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-[#5B6CFF] text-white flex items-center justify-center">
+                  <Play className="w-5 h-5 fill-white ml-0.5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-[#1E2233] dark:text-[#F3F4FA]">
+                    {activeSession.isMultiplayer
+                      ? `Resume Match (${activeSession.roomCode})`
+                      : `Resume Game (${activeSession.difficulty})`}
+                  </h4>
+                  <p className="text-xs text-[#1E2233]/60 dark:text-[#F3F4FA]/60">
+                    Continue where you left off
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleResumeSession}
+                  className="px-3.5 py-1.5 rounded-[10px] bg-[#5B6CFF] hover:bg-[#4D5EFF] text-white text-xs font-bold transition active:scale-95"
+                >
+                  Resume
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDiscardSession}
+                  className="p-1.5 rounded-full text-[#1E2233]/50 hover:text-[#1E2233] dark:text-[#F3F4FA]/50 dark:hover:text-[#F3F4FA] transition"
+                  title="Discard"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 1v1 P2P Multiplayer Card (Exact Flutter LinearGradient & styling) */}
+          <div
+            onClick={() => setShowMultiplayerMenu(true)}
+            className="w-full mb-7 p-5 rounded-[20px] bg-gradient-to-br from-[#5B6CFF] to-[#7585FF] dark:from-[#38437D] dark:to-[#272F55] text-white shadow-[0_6px_16px_rgba(91,108,255,0.3)] cursor-pointer active:scale-[0.99] transition-all flex items-center justify-between"
+          >
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white/20 rounded-[14px] flex items-center justify-center">
+                <Users className="w-7 h-7 text-white" />
+              </div>
+              <div>
+                <h3 className="text-[18px] font-bold text-white leading-tight">
+                  Multiplayer
+                </h3>
+                <p className="text-[13px] text-white/70 mt-0.5 leading-snug">
+                  Play live Sudoku with friends
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-white/70" />
+          </div>
+
+          {/* Solo Practice Header (Flutter: person_outline icon + 'Solo Practice') */}
+          <div className="flex items-center gap-2 mb-3 px-1">
+            <User className="w-5 h-5 text-[#1E2233]/70 dark:text-[#F3F4FA]/70" />
+            <h3 className="text-[20px] font-bold text-[#1E2233] dark:text-[#F3F4FA]">
+              Solo Practice
+            </h3>
+          </div>
+
+          {/* 5 Difficulty Buttons (Matching Flutter DifficultyButton.dart) */}
+          <div className="space-y-2.5 mb-6">
+            {[
+              { id: "easy" as Difficulty, label: "Easy", color: "#3DDC97" },
+              { id: "medium" as Difficulty, label: "Medium", color: "#4FC3F7" },
+              { id: "hard" as Difficulty, label: "Hard", color: "#FFC24B" },
+              { id: "difficult" as Difficulty, label: "Difficult", color: "#FF8A65" },
+              { id: "extreme" as Difficulty, label: "Extreme", color: "#FF5D6C" },
+            ].map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => handleStartSolo(d.id)}
+                className="w-full flex items-center justify-between px-[18px] py-[16px] rounded-[16px] bg-white dark:bg-[#1B1E29] border border-black/[0.06] dark:border-white/[0.06] shadow-xs hover:border-[#5B6CFF]/30 active:scale-[0.99] transition text-left group"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div
+                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: d.color }}
+                  />
+                  <span className="text-[16px] font-medium text-[#1E2233] dark:text-[#F3F4FA]">
+                    {d.label}
+                  </span>
+                </div>
+                <ChevronRight className="w-5 h-5 text-[#1E2233]/40 dark:text-[#F3F4FA]/40 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+            ))}
+          </div>
+
+          {/* Statistics Summary Card (Matching Flutter StatsSummaryCard.dart) */}
+          <div className="p-5 rounded-[16px] bg-white dark:bg-[#1B1E29] border border-black/[0.06] dark:border-white/[0.06] shadow-xs mb-6">
+            <h4 className="text-[20px] font-bold text-[#1E2233] dark:text-[#F3F4FA] mb-4">
+              Statistics
+            </h4>
+            <div className="grid grid-cols-2 gap-y-4 gap-x-4">
+              <div>
+                <div className="text-[26px] font-bold text-[#1E2233] dark:text-[#F3F4FA] leading-tight">
+                  {stats.totalGamesPlayed}
+                </div>
+                <span className="text-xs text-[#1E2233]/60 dark:text-[#F3F4FA]/60">
+                  Games Played
                 </span>
               </div>
-              <h2 className="text-2xl font-black mb-1">Multiplayer Duel</h2>
-              <p className="text-xs text-indigo-100/90 mb-4 max-w-[280px]">
-                Race head-to-head with friends in real-time. Share a 6-digit room PIN or direct invite link!
-              </p>
-              <button
-                type="button"
-                onClick={() => setShowMultiplayerMenu(true)}
-                className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-indigo-700 hover:bg-slate-100 font-bold text-sm shadow-md transition active:scale-95"
-              >
-                <Users className="w-4 h-4 text-indigo-600" />
-                <span>Play with Friends</span>
-              </button>
-            </div>
-            {/* Background design glow */}
-            <div className="absolute -right-6 -bottom-6 w-36 h-36 rounded-full bg-white/10 blur-xl pointer-events-none" />
-          </div>
-
-          {/* Solo Play Section */}
-          <div className="w-full">
-            <div className="flex items-center justify-between mb-3 px-1">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Single Player Puzzles
-              </h3>
-            </div>
-
-            {/* Difficulty Cards */}
-            <div className="grid grid-cols-2 gap-3 mb-6">
-              {[
-                {
-                  id: "easy" as Difficulty,
-                  title: "Easy",
-                  sub: "Great for warm-up",
-                  color: "border-emerald-500/30 hover:border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400",
-                },
-                {
-                  id: "medium" as Difficulty,
-                  title: "Medium",
-                  sub: "Classic balance",
-                  color: "border-amber-500/30 hover:border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400",
-                },
-                {
-                  id: "hard" as Difficulty,
-                  title: "Hard",
-                  sub: "Requires advanced logic",
-                  color: "border-rose-500/30 hover:border-rose-500 bg-rose-50/50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400",
-                },
-                {
-                  id: "expert" as Difficulty,
-                  title: "Expert",
-                  sub: "For master solvers",
-                  color: "border-purple-500/30 hover:border-purple-500 bg-purple-50/50 dark:bg-purple-950/20 text-purple-600 dark:text-purple-400",
-                },
-              ].map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleStartSolo(item.id)}
-                  className={`p-4 rounded-2xl border text-left transition active:scale-95 group ${item.color}`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-base font-bold capitalize text-slate-900 dark:text-slate-100">
-                      {item.title}
-                    </span>
-                    <Play className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
-                  </div>
-                  <span className="text-xs text-slate-500 dark:text-slate-400 block">
-                    {item.sub}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            {/* Mistake Rule Preference Selector */}
-            <div className="p-4 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-xs mb-6">
-              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-2.5">
-                Game Rules
-              </span>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { id: "standard" as MistakeRule, label: "3 Mistakes", icon: ShieldAlert },
-                  { id: "hardcore" as MistakeRule, label: "Sudden Death", icon: Zap },
-                  { id: "casual" as MistakeRule, label: "Casual (+30s)", icon: HeartHandshake },
-                ].map((rule) => {
-                  const Icon = rule.icon;
-                  const isSelected = mistakeRule === rule.id;
-                  return (
-                    <button
-                      key={rule.id}
-                      type="button"
-                      onClick={() => setMistakeRule(rule.id)}
-                      className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition active:scale-95 ${
-                        isSelected
-                          ? "bg-indigo-50 dark:bg-indigo-950/50 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-bold"
-                          : "bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400"
-                      }`}
-                    >
-                      <Icon className="w-4 h-4 mb-1" />
-                      <span className="text-[11px] leading-tight">{rule.label}</span>
-                    </button>
-                  );
-                })}
+              <div>
+                <div className="text-[26px] font-bold text-[#1E2233] dark:text-[#F3F4FA] leading-tight">
+                  {stats.totalGamesWon}
+                </div>
+                <span className="text-xs text-[#1E2233]/60 dark:text-[#F3F4FA]/60">
+                  Games Won
+                </span>
+              </div>
+              <div>
+                <div className="text-[26px] font-bold font-mono text-[#1E2233] dark:text-[#F3F4FA] leading-tight">
+                  {stats.bestTime}
+                </div>
+                <span className="text-xs text-[#1E2233]/60 dark:text-[#F3F4FA]/60">
+                  Best Time
+                </span>
+              </div>
+              <div>
+                <div className="text-[26px] font-bold text-[#1E2233] dark:text-[#F3F4FA] leading-tight">
+                  {stats.bestScore > 0 ? stats.bestScore : "--"}
+                </div>
+                <span className="text-xs text-[#1E2233]/60 dark:text-[#F3F4FA]/60">
+                  Best Score
+                </span>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* SCREEN 2: GAME SCREEN (SOLO OR MULTIPLAYER RACE) */}
+      {/* ========================================================================= */}
+      {/* SCREEN 2: GAME SCREEN (SOLO OR MULTIPLAYER RACE)                          */}
+      {/* ========================================================================= */}
       {(mode === "solo_game" || mode === "multiplayer_game") && (
-        <div className="w-full flex flex-col items-center animate-fadeIn">
+        <div className="w-full flex flex-col items-center animate-fadeIn max-w-[500px] mx-auto">
           {/* Header Stats */}
           <TopBar
             difficulty={difficulty}
@@ -486,6 +605,7 @@ export default function SudokuApp() {
             mistakes={gameState.mistakes}
             maxMistakes={gameState.maxMistakes}
             score={gameState.score}
+            lastDelta={lastDelta}
             timeFormatted={timeFormatted}
             isMuted={isMuted}
             onToggleMute={handleToggleMute}
@@ -494,14 +614,20 @@ export default function SudokuApp() {
             onBack={handleBackHome}
           />
 
-          {/* Multiplayer Race Progress Leaderboard */}
-          {mode === "multiplayer_game" && (
-            <RaceLeaderboard
-              players={players}
-              myId={roomService.getMyPeerId()}
-              onSendEmoji={handleSendEmoji}
-              latencyMs={latencyMs}
-            />
+          {/* Spectating Banner */}
+          {isSpectating && (
+            <div className="w-full max-w-[490px] mx-auto px-2 mt-2">
+              <div className="p-3 rounded-[12px] bg-[#FF5D6C]/10 border border-[#FF5D6C]/30 text-[#FF5D6C] text-xs font-bold flex items-center justify-between">
+                <span>Spectating Match (Knocked Out by Mistakes)</span>
+                <button
+                  type="button"
+                  onClick={handleLeaveRoom}
+                  className="px-2 py-0.5 rounded bg-[#FF5D6C] text-white text-[11px]"
+                >
+                  Leave
+                </button>
+              </div>
+            </div>
           )}
 
           {/* Sudoku 9x9 Board */}
@@ -519,13 +645,18 @@ export default function SudokuApp() {
             onInputNumber={inputNumber}
             onErase={eraseCell}
             onUndo={undo}
-            onRestart={
-              mode === "solo_game"
-                ? () => startNewGame(difficulty, mistakeRule)
-                : undefined
-            }
             disabled={gameState.isFinished || (gameState.isKnockedOut && isSpectating)}
           />
+
+          {/* Multiplayer Race Progress Leaderboard at the bottom */}
+          {mode === "multiplayer_game" && (
+            <RaceLeaderboard
+              players={players}
+              myId={roomService.getMyPeerId()}
+              onSendEmoji={handleSendEmoji}
+              latencyMs={latencyMs}
+            />
+          )}
         </div>
       )}
     </main>

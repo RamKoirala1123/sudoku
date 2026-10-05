@@ -28,6 +28,10 @@ class SoundService {
     }
   }
 
+  setMuted(muted: boolean) {
+    this.setEnabled(!muted);
+  }
+
   private _play(filename: string, volume = 0.5) {
     if (!this._enabled || typeof window === 'undefined') return;
 
@@ -48,12 +52,20 @@ class SoundService {
     }
   }
 
+  playCellSuccess() {
+    this._play('success_cell.mp3', 0.6);
+  }
+
   playSuccess() {
-    this._play('cell_success.mp3', 0.6);
+    this.playCellSuccess();
+  }
+
+  playCellError() {
+    this._play('error_cell.mp3', 0.6);
   }
 
   playError() {
-    this._play('cell_error.mp3', 0.6);
+    this.playCellError();
   }
 
   playNumberCompleted() {
@@ -61,21 +73,20 @@ class SoundService {
   }
 
   playCompletion() {
-    this._play('success_cell.mp3', 0.8);
+    this._play('number_completion.mp3', 0.8);
+  }
+
+  playBoardPlacing() {
+    this._play('board_placing.mp3', 0.5);
   }
 
   playPlace() {
-    this._play('board_placing.mp3', 0.4);
+    this.playBoardPlacing();
   }
 
   playTap() {
-    this._play('button_click.mp3', 0.4);
-  }
-
-  setMuted(muted: boolean) {
-    this.setEnabled(!muted);
+    this._play('cell_success.mp3', 0.25);
   }
 }
-
 
 export const soundService = new SoundService();

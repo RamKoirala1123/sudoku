@@ -31,8 +31,10 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
   });
 
   const [pencilMode, setPencilMode] = useState(false);
+  const [lastDelta, setLastDelta] = useState<number | null>(null);
   const moveHistoryRef = useRef<MoveRecord[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
 
   // Timer ticker
   useEffect(() => {
@@ -162,6 +164,7 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
 
       if (isCorrect) {
         soundService.playSuccess();
+        setLastDelta(50);
 
         // AUTO-CLEAR NOTES: erase this number from peers in same row, column, and 3x3 box
         const row = Math.floor(selected / 9);
@@ -228,6 +231,7 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
       } else {
         // INCORRECT MOVE
         soundService.playError();
+        setLastDelta(-20);
         newIncorrect.push(selected);
 
         let newLives = current.lives;
@@ -368,6 +372,7 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
     canUndo: moveHistoryRef.current.length > 0,
     remainingCounts,
     timeFormatted,
+    lastDelta,
     isKnockedOut,
     isFinished,
     maxMistakes,

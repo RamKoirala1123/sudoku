@@ -1,7 +1,8 @@
-'use client';
+"use client";
 
-import React from 'react';
-import { SudokuGameState } from '../lib/types';
+import React, { useEffect, useState } from "react";
+import { SudokuGameState } from "../lib/types";
+import { soundService } from "../lib/sound/soundService";
 
 interface SudokuBoardProps {
   state: SudokuGameState;
@@ -15,6 +16,16 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = ({
   isSpectating = false,
 }) => {
   const { board, puzzle, selectedCell, candidates, incorrectCells } = state;
+  const [hasPlayedInitialSound, setHasPlayedInitialSound] = useState(false);
+
+  // Play board placing sound once on board mount
+  useEffect(() => {
+    if (!hasPlayedInitialSound && puzzle) {
+      soundService.playBoardPlacing();
+      setHasPlayedInitialSound(true);
+    }
+  }, [puzzle, hasPlayedInitialSound]);
+
   const selectedVal = selectedCell !== null ? board[selectedCell] : null;
   const selRow = selectedCell !== null ? Math.floor(selectedCell / 9) : null;
   const selCol = selectedCell !== null ? selectedCell % 9 : null;
@@ -22,8 +33,10 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = ({
   const selBoxCol = selCol !== null ? Math.floor(selCol / 3) * 3 : null;
 
   return (
-    <div className="w-full max-w-[490px] mx-auto select-none aspect-square">
-      <div className="w-full h-full grid grid-cols-9 grid-rows-9 border-2 border-slate-800 dark:border-slate-300 rounded-lg overflow-hidden bg-white dark:bg-[#181B26] shadow-lg">
+    <div className="w-full max-w-[490px] mx-auto select-none aspect-square p-2">
+      <div
+        className="w-full h-full grid grid-cols-9 grid-rows-9 rounded-[12px] overflow-hidden transition-colors shadow-[0_8px_18px_rgba(0,0,0,0.08)] bg-white dark:bg-[#1B1E29] border-[2.5px] border-[#344861] dark:border-[#7A869E]"
+      >
         {Array.from({ length: 81 }).map((_, index) => {
           const row = Math.floor(index / 9);
           const col = index % 9;
@@ -31,69 +44,86 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = ({
           const boxCol = Math.floor(col / 3) * 3;
 
           const isSelected = selectedCell === index;
-          const isPeer =
+          const isRelated =
             selectedCell !== null &&
             !isSelected &&
             (row === selRow || col === selCol || (boxRow === selBoxRow && boxCol === selBoxCol));
           const val = board[index];
-          const isSameVal = selectedVal !== null && selectedVal !== 0 && val === selectedVal;
-          const isGiven = puzzle?.givens[index] !== 0;
+          const isSameVal = selectedVal !== null && selectedVal !== 0 && val === selectedVal && !isSelected;
+          const isGiven = puzzle ? puzzle.givens[index] !== 0 : false;
           const isIncorrect = incorrectCells.includes(index);
-          const cellCandidates = candidates[index] ?? [];
+          const cellCandidates = candidates[index] || [];
 
-          // Border formatting for 3x3 boxes (Sudoku.com style)
-          const borderRight =
-            col === 2 || col === 5
-              ? 'border-r-2 border-slate-700 dark:border-slate-400'
-              : col !== 8
-              ? 'border-r border-slate-200 dark:border-slate-800'
-              : '';
-          const borderBottom =
-            row === 2 || row === 5
-              ? 'border-b-2 border-slate-700 dark:border-slate-400'
-              : row !== 8
-              ? 'border-b border-slate-200 dark:border-slate-800'
-              : '';
-
-          // Background styles
-          let bgClass = 'bg-transparent';
+          // BoardPalette color resolution (Light vs Dark)
+          // Background Color priority:
+          // 1. isSelected: #BBDEFB (light) / #32486E (dark)
+          // 2. isIncorrect: #FFCDD2 (light) / #4C222B (dark)
+          // 3. isSameVal: #CCE5FF (light) / #2E3F5F (dark)
+          // 4. isRelated: #E8F0FE (light) / #232A3B (dark)
+          let bgClass = "bg-transparent";
           if (isSelected) {
-            bgClass = isIncorrect
-              ? 'bg-red-500/25 dark:bg-red-900/35'
-              : 'bg-indigo-500/25 dark:bg-indigo-500/30';
+            bgClass = "bg-[#BBDEFB] dark:bg-[#32486E]";
+          } else if (isIncorrect) {
+            bgClass = "bg-[#FFCDD2] dark:bg-[#4C222B]";
           } else if (isSameVal) {
-            bgClass = 'bg-indigo-500/18 dark:bg-indigo-500/20';
-          } else if (isPeer) {
-            bgClass = 'bg-slate-100/80 dark:bg-slate-800/40';
+            bgClass = "bg-[#CCE5FF] dark:bg-[#2E3F5F]";
+          } else if (isRelated) {
+            bgClass = "bg-[#E8F0FE] dark:bg-[#232A3B]";
           }
 
-          // Number styles (regular font weight as requested)
-          let textClass = 'text-slate-900 dark:text-slate-100 font-normal';
+          // Text Color priority:
+          // isIncorrect: #FF5D6C (light) / #FF8A93 (dark)
+          // isGiven: #1E2233 (light) / #F3F4FA (dark)
+          // playerText: #0072E3 (light) / #4D9CFF (dark)
+          let textClass = "";
           if (isIncorrect) {
-            textClass = 'text-red-500 dark:text-red-400 font-medium animate-pulse';
+            textClass = "text-[#FF5D6C] dark:text-[#FF8A93]";
           } else if (isGiven) {
-            textClass = 'text-slate-950 dark:text-white font-normal';
-          } else if (val !== 0) {
-            textClass = 'text-indigo-600 dark:text-indigo-400 font-normal';
+            textClass = "text-[#1E2233] dark:text-[#F3F4FA]";
+          } else {
+            textClass = "text-[#0072E3] dark:text-[#4D9CFF]";
           }
+
+          // Exact Flutter Board Borders:
+          // Every 3rd cell has thick border (2px), otherwise thin (1px)
+          const isRightBoxEdge = (col + 1) % 3 === 0 && col < 8;
+          const isBottomBoxEdge = (row + 1) % 3 === 0 && row < 8;
+          const isRightThinEdge = (col + 1) % 3 !== 0 && col < 8;
+          const isBottomThinEdge = (row + 1) % 3 !== 0 && row < 8;
 
           return (
             <div
               key={index}
               onClick={() => !isSpectating && onSelectCell(index)}
-              className={`relative flex items-center justify-center cursor-pointer transition-colors duration-100 ${borderRight} ${borderBottom} ${bgClass}`}
-              style={{
-                fontSize: 'clamp(18px, 4.8vw, 27px)',
-              }}
+              className={`relative flex items-center justify-center cursor-pointer transition-colors duration-75 ${bgClass} ${
+                isRightBoxEdge ? "border-r-[2px] border-r-[#344861] dark:border-r-[#7A869E]" : ""
+              } ${
+                isRightThinEdge ? "border-r border-r-[#D6DCED] dark:border-r-[#2E3445]" : ""
+              } ${
+                isBottomBoxEdge ? "border-b-[2px] border-b-[#344861] dark:border-b-[#7A869E]" : ""
+              } ${
+                isBottomThinEdge ? "border-b border-b-[#D6DCED] dark:border-b-[#2E3445]" : ""
+              }`}
             >
               {val !== 0 ? (
-                <span className={textClass}>{val}</span>
+                /* Regular (non-bold) 400 weight Sudoku font */
+                <span
+                  className={`text-xl sm:text-2xl font-normal leading-none transition-transform duration-100 ${textClass} ${
+                    isIncorrect ? "animate-errorShake" : ""
+                  }`}
+                  style={{ fontWeight: 400 }}
+                >
+                  {val}
+                </span>
               ) : cellCandidates.length > 0 ? (
-                // 3x3 Pencil notes layout
-                <div className="absolute inset-0 p-0.5 grid grid-cols-3 grid-rows-3 text-[10px] text-slate-400 dark:text-slate-400 font-normal leading-none pointer-events-none select-none">
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
-                    <div key={n} className="flex items-center justify-center">
-                      {cellCandidates.includes(n) ? n : ''}
+                /* 3x3 Pencil notes layout with exact Flutter proportions */
+                <div className="w-full h-full p-[2px] grid grid-cols-3 grid-rows-3 pointer-events-none">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                    <div
+                      key={num}
+                      className="flex items-center justify-center text-[8px] sm:text-[9.5px] leading-none font-normal text-[#0072E3]/90 dark:text-[#4D9CFF]/90"
+                    >
+                      {cellCandidates.includes(num) ? num : ""}
                     </div>
                   ))}
                 </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Users, PlusCircle, LogIn, ArrowLeft } from "lucide-react";
+import { User, PlusCircle, Users, ArrowLeft } from "lucide-react";
 
 interface MultiplayerMenuModalProps {
   initialNickname: string;
@@ -18,7 +18,7 @@ export const MultiplayerMenuModal: React.FC<MultiplayerMenuModalProps> = ({
   onJoin,
   onClose,
 }) => {
-  const [nickname, setNickname] = useState(initialNickname || `Player${Math.floor(1000 + Math.random() * 9000)}`);
+  const [nickname, setNickname] = useState(initialNickname || "Player");
   const [mode, setMode] = useState<"menu" | "join">("menu");
   const [roomCodeInput, setRoomCodeInput] = useState("");
   const [joinError, setJoinError] = useState("");
@@ -40,89 +40,96 @@ export const MultiplayerMenuModal: React.FC<MultiplayerMenuModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm select-none">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-fadeIn">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs select-none animate-fadeIn">
+      <div className="bg-white dark:bg-[#1B1E29] border border-black/[0.08] dark:border-white/[0.08] rounded-[24px] max-w-md w-full p-6 shadow-2xl">
+        {/* Header (Flutter AppBar title: 'Multiplayer') */}
+        <div className="flex items-center justify-between pb-3 border-b border-black/[0.06] dark:border-white/[0.06]">
           <button
             type="button"
             onClick={mode === "join" ? () => setMode("menu") : onClose}
-            className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition"
+            className="flex items-center gap-1 text-[#1E2233]/70 dark:text-[#F3F4FA]/70 hover:text-[#1E2233] dark:hover:text-[#F3F4FA] transition"
           >
             <ArrowLeft className="w-5 h-5" />
             <span className="text-sm font-medium">{mode === "join" ? "Back" : "Close"}</span>
           </button>
-          <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-bold text-sm">
-            <Users className="w-4 h-4" />
-            <span>Multiplayer Race</span>
+          <h2 className="text-base font-bold text-[#1E2233] dark:text-[#F3F4FA]">Multiplayer</h2>
+          <div className="w-6" />
+        </div>
+
+        {/* Flutter Your Name input */}
+        <div className="my-5">
+          <label className="text-xs font-bold text-[#1E2233]/70 dark:text-[#F3F4FA]/70 block mb-2">
+            Your Name
+          </label>
+          <div className="relative flex items-center">
+            <User className="absolute left-3.5 w-4 h-4 text-[#1E2233]/40 dark:text-[#F3F4FA]/40" />
+            <input
+              type="text"
+              value={nickname}
+              maxLength={15}
+              onChange={(e) => handleNicknameChange(e.target.value)}
+              placeholder="Enter your name"
+              className="w-full pl-10 pr-4 py-3 rounded-[14px] bg-[#F1F3FA] dark:bg-[#1E2233] text-[#1E2233] dark:text-[#F3F4FA] font-medium text-sm border-none focus:outline-none focus:ring-2 focus:ring-[#5B6CFF]"
+            />
           </div>
         </div>
 
-        {/* Nickname Input */}
-        <div className="my-5">
-          <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
-            Your Nickname
-          </label>
-          <input
-            type="text"
-            value={nickname}
-            maxLength={18}
-            onChange={(e) => handleNicknameChange(e.target.value)}
-            placeholder="Enter nickname..."
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
-
         {mode === "menu" ? (
-          /* Host or Join Selection Cards */
-          <div className="space-y-3">
-            {/* Host Game Card */}
-            <button
-              type="button"
-              onClick={onHost}
-              className="w-full flex items-center justify-between p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 hover:bg-indigo-100/80 dark:hover:bg-indigo-900/40 transition active:scale-98 text-left group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/25 group-hover:scale-105 transition-transform">
+          /* Host or Join Selection Cards (Exact Flutter layout & colors) */
+          <div className="space-y-4">
+            {/* Host Game Card (AppColors.primary #5B6CFF) */}
+            <div className="p-5 rounded-[18px] bg-white dark:bg-[#1B1E29] border-[1.5px] border-[#5B6CFF]/25 shadow-[0_4px_14px_rgba(91,108,255,0.06)] flex flex-col justify-between">
+              <div className="flex items-start gap-3.5 mb-4">
+                <div className="p-2.5 rounded-[12px] bg-[#5B6CFF]/12 text-[#5B6CFF] flex-shrink-0">
                   <PlusCircle className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                    Host a Match
+                  <h3 className="text-base font-bold text-[#1E2233] dark:text-[#F3F4FA] leading-tight">
+                    Host a Game
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Create a 6-digit room, choose rules & invite friends
+                  <p className="text-xs text-[#1E2233]/60 dark:text-[#F3F4FA]/60 mt-1 leading-snug">
+                    Choose difficulty and rules, invite friends with a 6-digit code
                   </p>
                 </div>
               </div>
-            </button>
+              <button
+                type="button"
+                onClick={onHost}
+                className="w-full py-2.5 px-4 rounded-[12px] bg-[#5B6CFF] hover:bg-[#4D5EFF] text-white font-bold text-sm shadow-md shadow-[#5B6CFF]/25 active:scale-98 transition"
+              >
+                Create Room
+              </button>
+            </div>
 
-            {/* Join Game Card */}
-            <button
-              type="button"
-              onClick={() => setMode("join")}
-              className="w-full flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition active:scale-98 text-left group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-slate-700 dark:bg-slate-700 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
-                  <LogIn className="w-6 h-6" />
+            {/* Join Game Card (AppColors.secondary #FF8A65) */}
+            <div className="p-5 rounded-[18px] bg-white dark:bg-[#1B1E29] border-[1.5px] border-[#FF8A65]/25 shadow-[0_4px_14px_rgba(255,138,101,0.06)] flex flex-col justify-between">
+              <div className="flex items-start gap-3.5 mb-4">
+                <div className="p-2.5 rounded-[12px] bg-[#FF8A65]/12 text-[#FF8A65] flex-shrink-0">
+                  <Users className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                    Join Match with PIN
+                  <h3 className="text-base font-bold text-[#1E2233] dark:text-[#F3F4FA] leading-tight">
+                    Join a Game
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Enter friend&apos;s 6-digit code or link
+                  <p className="text-xs text-[#1E2233]/60 dark:text-[#F3F4FA]/60 mt-1 leading-snug">
+                    Enter a 6-digit room code from a friend to start playing
                   </p>
                 </div>
               </div>
-            </button>
+              <button
+                type="button"
+                onClick={() => setMode("join")}
+                className="w-full py-2.5 px-4 rounded-[12px] bg-[#FF8A65] hover:bg-[#F47D57] text-white font-bold text-sm shadow-md shadow-[#FF8A65]/25 active:scale-98 transition"
+              >
+                Join with Code
+              </button>
+            </div>
           </div>
         ) : (
           /* Join Screen with 6-digit pin input */
           <form onSubmit={handleJoinSubmit} className="space-y-4">
             <div>
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-2 text-center">
+              <label className="text-xs font-bold text-[#1E2233]/70 dark:text-[#F3F4FA]/70 block mb-2 text-center">
                 Enter 6-Digit Room Code
               </label>
               <input
@@ -140,10 +147,10 @@ export const MultiplayerMenuModal: React.FC<MultiplayerMenuModalProps> = ({
                 }}
                 placeholder="123456"
                 autoFocus
-                className="w-full text-center text-3xl font-mono font-bold tracking-widest px-4 py-3 rounded-2xl border-2 border-indigo-400 dark:border-indigo-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-4 focus:ring-indigo-500/20"
+                className="w-full text-center text-3xl font-mono font-bold tracking-widest px-4 py-3 rounded-[16px] border-2 border-[#5B6CFF] bg-[#F1F3FA] dark:bg-[#1E2233] text-[#1E2233] dark:text-[#F3F4FA] focus:outline-none focus:ring-4 focus:ring-[#5B6CFF]/20"
               />
               {joinError && (
-                <p className="text-xs text-rose-500 font-semibold text-center mt-2">
+                <p className="text-xs text-[#FF5D6C] font-semibold text-center mt-2">
                   {joinError}
                 </p>
               )}
@@ -152,7 +159,7 @@ export const MultiplayerMenuModal: React.FC<MultiplayerMenuModalProps> = ({
             <button
               type="submit"
               disabled={roomCodeInput.length !== 6}
-              className="w-full py-3.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition active:scale-98 disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-indigo-500/25"
+              className="w-full py-3.5 px-4 rounded-[14px] bg-[#5B6CFF] hover:bg-[#4D5EFF] text-white font-bold transition active:scale-98 disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-[#5B6CFF]/25"
             >
               Join Match
             </button>

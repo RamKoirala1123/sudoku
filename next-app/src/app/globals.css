@@ -1,18 +1,41 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #F6F7FB;
+  --foreground: #1E2233;
+  --surface: #FFFFFF;
+  --surface-alt: #EDEFF7;
+  --primary: #5B6CFF;
+  --primary-dark: #7C8CFF;
+  --secondary: #FF8A65;
+  --success: #3DDC97;
+  --error: #FF5D6C;
+  --warning: #FFC24B;
+  --heart-empty: #DADFEA;
 }
 
 .dark {
-  --background: #090d16;
-  --foreground: #f8fafc;
+  --background: #11131A;
+  --foreground: #F3F4FA;
+  --surface: #1B1E29;
+  --surface-alt: #242836;
+  --primary: #7C8CFF;
+  --primary-dark: #5B6CFF;
+  --secondary: #FF8A65;
+  --success: #3DDC97;
+  --error: #FF5D6C;
+  --warning: #FFC24B;
+  --heart-empty: #3A3F52;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
+  --color-primary: var(--primary);
+  --color-primary-dark: var(--primary-dark);
+  --color-secondary: var(--secondary);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -20,16 +43,18 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
+  margin: 0;
+  padding: 0;
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: scale(0.97);
+    transform: scale(0.98);
   }
   to {
     opacity: 1;
@@ -42,25 +67,91 @@ body {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
-  80% {
-    opacity: 0.9;
-    transform: translateY(-160px) scale(1.2);
+  75% {
+    opacity: 0.95;
+    transform: translateY(-160px) scale(1.25);
   }
   100% {
     opacity: 0;
-    transform: translateY(-220px) scale(1.3);
+    transform: translateY(-220px) scale(1.35);
   }
 }
 
+@keyframes scoreDelta {
+  0% {
+    opacity: 1;
+    transform: translateY(2px);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-8px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-18px);
+  }
+}
+
+@keyframes cellInitialPop {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes waveHighlight {
+  0% {
+    background-color: rgba(187, 222, 251, 0.9);
+    transform: scale(0.95);
+  }
+  50% {
+    background-color: rgba(187, 222, 251, 0.6);
+    transform: scale(1.05);
+  }
+  100% {
+    background-color: transparent;
+    transform: scale(1);
+  }
+}
+
+@keyframes errorShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+
 .animate-fadeIn {
-  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .animate-floatUp {
   animation: floatUp 2.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
-/* Hide scrollbars for emoji bar */
+.animate-scoreDelta {
+  animation: scoreDelta 0.75s ease-out forwards;
+}
+
+.animate-initialPop {
+  animation: cellInitialPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-wave {
+  animation: waveHighlight 0.6s ease-out forwards;
+}
+
+.animate-errorShake {
+  animation: errorShake 0.4s ease-in-out forwards;
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }

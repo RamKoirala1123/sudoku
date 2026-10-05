@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { Undo2, Eraser, Pencil, RotateCcw, Lightbulb } from "lucide-react";
+import { Undo2, Sparkles, Edit3 } from "lucide-react";
 
 interface NumberPadProps {
   remainingCounts: Record<number, number>;
@@ -10,8 +10,6 @@ interface NumberPadProps {
   onInputNumber: (num: number) => void;
   onErase: () => void;
   onUndo: () => void;
-  onRestart?: () => void;
-  onHint?: () => void;
   disabled?: boolean;
 }
 
@@ -22,8 +20,6 @@ export const NumberPad: React.FC<NumberPadProps> = ({
   onInputNumber,
   onErase,
   onUndo,
-  onRestart,
-  onHint,
   disabled = false,
 }) => {
   // Keyboard listener for 1-9, Backspace, N, Z
@@ -53,19 +49,19 @@ export const NumberPad: React.FC<NumberPadProps> = ({
   }, [disabled, remainingCounts, onInputNumber, onErase, onToggleNotes, onUndo]);
 
   return (
-    <div className="w-full max-w-[490px] mx-auto px-2 mt-4 select-none">
-      {/* Action Controls Row */}
-      <div className="grid grid-cols-4 gap-2 mb-3">
+    <div className="w-full max-w-[490px] mx-auto px-2 mt-2 select-none">
+      {/* Flutter IconLabelButton Toolbar: Undo, Erase, Pencil */}
+      <div className="flex items-center justify-around py-2 mb-2">
         {/* Undo */}
         <button
           type="button"
           onClick={onUndo}
           disabled={disabled}
-          className="flex flex-col items-center justify-center py-2 px-1 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 transition-all text-slate-700 dark:text-slate-300 active:scale-95 disabled:opacity-40"
+          className="flex flex-col items-center justify-center px-4 py-1.5 rounded-lg text-[#1E2233] dark:text-[#F3F4FA] hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition disabled:opacity-40"
           title="Undo (Ctrl+Z)"
         >
-          <Undo2 className="w-5 h-5 mb-0.5 text-indigo-600 dark:text-indigo-400" />
-          <span className="text-[11px] font-medium tracking-tight">Undo</span>
+          <Undo2 className="w-5 h-5 mb-1 text-[#1E2233] dark:text-[#F3F4FA]" />
+          <span className="text-xs font-normal">Undo</span>
         </button>
 
         {/* Erase */}
@@ -73,87 +69,73 @@ export const NumberPad: React.FC<NumberPadProps> = ({
           type="button"
           onClick={onErase}
           disabled={disabled}
-          className="flex flex-col items-center justify-center py-2 px-1 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 transition-all text-slate-700 dark:text-slate-300 active:scale-95 disabled:opacity-40"
+          className="flex flex-col items-center justify-center px-4 py-1.5 rounded-lg text-[#1E2233] dark:text-[#F3F4FA] hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition disabled:opacity-40"
           title="Erase (Backspace)"
         >
-          <Eraser className="w-5 h-5 mb-0.5 text-rose-500 dark:text-rose-400" />
-          <span className="text-[11px] font-medium tracking-tight">Erase</span>
+          <Sparkles className="w-5 h-5 mb-1 text-[#1E2233] dark:text-[#F3F4FA]" />
+          <span className="text-xs font-normal">Erase</span>
         </button>
 
-        {/* Pencil / Notes Toggle */}
+        {/* Pencil / Notes */}
         <button
           type="button"
           onClick={onToggleNotes}
           disabled={disabled}
-          className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all active:scale-95 disabled:opacity-40 ${
-            isNotesMode
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/25 dark:bg-indigo-500"
-              : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-300"
-          }`}
-          title="Notes mode (N)"
+          className="flex flex-col items-center justify-center px-4 py-1.5 rounded-lg active:scale-95 transition disabled:opacity-40"
+          title="Pencil Mode (N)"
         >
-          <div className="relative">
-            <Pencil className={`w-5 h-5 mb-0.5 ${isNotesMode ? "text-white" : "text-amber-500 dark:text-amber-400"}`} />
-            <span
-              className={`absolute -top-1 -right-4 px-1 py-0.2 text-[8px] font-bold rounded-full uppercase leading-tight ${
-                isNotesMode ? "bg-amber-400 text-slate-950 font-black" : "bg-slate-300 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-              }`}
-            >
-              {isNotesMode ? "ON" : "OFF"}
-            </span>
-          </div>
-          <span className="text-[11px] font-medium tracking-tight">Notes</span>
+          <Edit3
+            className={`w-5 h-5 mb-1 transition-colors ${
+              isNotesMode ? "text-[#5B6CFF] dark:text-[#7C8CFF]" : "text-[#1E2233] dark:text-[#F3F4FA]"
+            }`}
+          />
+          <span
+            className={`text-xs font-medium transition-colors ${
+              isNotesMode ? "text-[#5B6CFF] dark:text-[#7C8CFF] font-bold" : "text-[#1E2233] dark:text-[#F3F4FA]"
+            }`}
+          >
+            {isNotesMode ? "Pencil ON" : "Pencil"}
+          </span>
         </button>
-
-        {/* Restart or Hint */}
-        {onHint ? (
-          <button
-            type="button"
-            onClick={onHint}
-            disabled={disabled}
-            className="flex flex-col items-center justify-center py-2 px-1 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 transition-all text-slate-700 dark:text-slate-300 active:scale-95 disabled:opacity-40"
-            title="Hint"
-          >
-            <Lightbulb className="w-5 h-5 mb-0.5 text-amber-500 dark:text-amber-400" />
-            <span className="text-[11px] font-medium tracking-tight">Hint</span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onRestart}
-            disabled={disabled}
-            className="flex flex-col items-center justify-center py-2 px-1 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 transition-all text-slate-700 dark:text-slate-300 active:scale-95 disabled:opacity-40"
-            title="Restart"
-          >
-            <RotateCcw className="w-5 h-5 mb-0.5 text-sky-500 dark:text-sky-400" />
-            <span className="text-[11px] font-medium tracking-tight">Restart</span>
-          </button>
-        )}
       </div>
 
-      {/* 1-9 Number Row (Sudoku.com style with remaining counts) */}
-      <div className="grid grid-cols-9 gap-1.5 sm:gap-2">
+      {/* Flutter NumberPadWidget 1-9 Row */}
+      <div className="grid grid-cols-9 gap-1 sm:gap-1.5">
         {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => {
           const remaining = remainingCounts[num] ?? 9;
-          const isDone = remaining <= 0;
+          const isExhausted = remaining <= 0;
 
           return (
             <button
               key={num}
               type="button"
-              disabled={disabled || isDone}
+              disabled={disabled || isExhausted}
               onClick={() => onInputNumber(num)}
-              className={`flex flex-col items-center justify-center h-14 sm:h-16 rounded-xl transition-all duration-150 relative active:scale-90 ${
-                isDone
-                  ? "opacity-20 pointer-events-none bg-slate-100 dark:bg-slate-800/40 text-slate-400"
-                  : "bg-white dark:bg-slate-800/90 text-slate-800 dark:text-slate-100 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:border-indigo-400 border border-slate-200 dark:border-slate-700 shadow-sm active:bg-indigo-100"
+              className={`flex flex-col items-center justify-center h-14 sm:h-16 rounded-[10px] transition-all duration-100 border active:scale-90 ${
+                isExhausted
+                  ? "bg-white/40 dark:bg-[#1B1E29]/40 border-black/5 dark:border-white/5 opacity-30 pointer-events-none"
+                  : "bg-white dark:bg-[#1B1E29] border-black/10 dark:border-white/10 hover:border-[#5B6CFF] dark:hover:border-[#7C8CFF] active:bg-[#5B6CFF]/10 shadow-xs"
               }`}
             >
-              <span className="text-2xl sm:text-3xl font-normal leading-none mb-1 text-slate-900 dark:text-slate-100">
+              {/* Flutter Number TextStyle: bold, 22px, AppColors.primary */}
+              <span
+                className={`text-[22px] font-bold leading-none mb-0.5 ${
+                  isExhausted
+                    ? "text-[#1E2233]/30 dark:text-[#F3F4FA]/30"
+                    : "text-[#5B6CFF] dark:text-[#7C8CFF]"
+                }`}
+              >
                 {num}
               </span>
-              <span className="text-[10px] sm:text-[11px] text-slate-400 dark:text-slate-500 font-medium leading-none">
-                {isDone ? "✓" : remaining}
+              {/* Remaining count: 10px, onSurface 0.7 */}
+              <span
+                className={`text-[10px] leading-none ${
+                  isExhausted
+                    ? "text-[#1E2233]/30 dark:text-[#F3F4FA]/30"
+                    : "text-[#1E2233]/70 dark:text-[#F3F4FA]/70"
+                }`}
+              >
+                {remaining}
               </span>
             </button>
           );
