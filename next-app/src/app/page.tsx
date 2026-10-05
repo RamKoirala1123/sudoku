@@ -143,10 +143,11 @@ export default function SudokuApp() {
       const hash = window.location.hash;
       const match = hash.match(/(?:join|room)=([0-9]{6})/);
       if (match && match[1]) {
-        handleJoinRoom(match[1]);
+        handleJoinRoom(match[1]).catch(() => {});
       }
     }
   }, []);
+
 
   // Update theme class on document
   useEffect(() => {
@@ -240,30 +241,45 @@ export default function SudokuApp() {
 
   // Host a room
   const handleHostRoom = async () => {
-    setShowMultiplayerMenu(false);
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setRoomCode(code);
-    setIsHost(true);
-    setIsSpectating(false);
-    window.location.hash = `#room=${code}`;
+    try {
+      setShowMultiplayerMenu(false);
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      setRoomCode(code);
+      setIsHost(true);
+      setIsSpectating(false);
+      window.location.hash = `#room=${code}`;
 
-    setupRoomListeners();
-    await roomService.initializeRoom(code, nickname, true);
-    setMode("multiplayer_lobby");
+      setupRoomListeners();
+      await roomService.initializeRoom(code, nickname, true);
+      setMode("multiplayer_lobby");
+    } catch (err) {
+      console.warn("[Multiplayer] Host room creation failed:", err);
+      window.location.hash = "";
+      setMode("home");
+      alert("Could not connect to multiplayer network. Please try again.");
+    }
   };
 
   // Join a room
   const handleJoinRoom = async (code: string) => {
-    setShowMultiplayerMenu(false);
-    setRoomCode(code);
-    setIsHost(false);
-    setIsSpectating(false);
-    window.location.hash = `#room=${code}`;
+    try {
+      setShowMultiplayerMenu(false);
+      setRoomCode(code);
+      setIsHost(false);
+      setIsSpectating(false);
+      window.location.hash = `#room=${code}`;
 
-    setupRoomListeners();
-    await roomService.initializeRoom(code, nickname, false);
-    setMode("multiplayer_lobby");
+      setupRoomListeners();
+      await roomService.initializeRoom(code, nickname, false);
+      setMode("multiplayer_lobby");
+    } catch (err) {
+      console.warn("[Multiplayer] Join room failed:", err);
+      window.location.hash = "";
+      setMode("home");
+      alert("Could not join room. Ensure the host is in the lobby and the code is correct.");
+    }
   };
+
 
   // Host launches game
   const handleHostStartMatch = () => {

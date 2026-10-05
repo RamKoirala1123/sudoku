@@ -10,8 +10,9 @@ export class SignalingService {
   readonly roomCode: string;
 
   private readonly _brokers = [
-    'wss://broker.hivemq.com:8884/mqtt',
     'wss://broker.emqx.io:8084/mqtt',
+    'wss://broker.hivemq.com:8884/mqtt',
+    'wss://broker.hivemq.com:8000/mqtt',
   ];
 
   constructor(roomCode: string, clientId?: string) {
@@ -46,7 +47,7 @@ export class SignalingService {
   private _connectToBroker(brokerUrl: string): Promise<boolean> {
     return new Promise((resolve) => {
       try {
-        const ws = new WebSocket(brokerUrl, 'mqtt');
+        const ws = new WebSocket(brokerUrl, ['mqtt']);
         ws.binaryType = 'arraybuffer';
         this._socket = ws;
 
@@ -55,7 +56,8 @@ export class SignalingService {
             try { ws.close(); } catch {}
             resolve(false);
           }
-        }, 8000);
+        }, 5000);
+
 
         ws.onopen = () => {
           ws.send(this._buildConnectPacket(this.clientId));
