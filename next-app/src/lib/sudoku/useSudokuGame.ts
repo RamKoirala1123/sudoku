@@ -369,7 +369,15 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
     undo,
     startNewGame,
     startWithPuzzle,
-    canUndo: moveHistoryRef.current.length > 0,
+    pause: () => setState((s) => (s.status === 'playing' ? { ...s, status: 'paused' } : s)),
+    resume: () => setState((s) => (s.status === 'paused' ? { ...s, status: 'playing' } : s)),
+    restart: () => {
+      if (state.puzzle) {
+        startWithPuzzle(state.puzzle, state.mistakeRule);
+      } else {
+        startNewGame(state.difficulty, state.mistakeRule);
+      }
+    },
     remainingCounts,
     timeFormatted,
     lastDelta,

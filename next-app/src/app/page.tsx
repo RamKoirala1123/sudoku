@@ -22,6 +22,9 @@ import { useSudokuGame } from "@/lib/sudoku/useSudokuGame";
 import { TopBar } from "@/components/TopBar";
 import { SudokuBoard } from "@/components/SudokuBoard";
 import { NumberPad } from "@/components/NumberPad";
+import { PauseDialog } from "@/components/PauseDialog";
+import { RestartConfirmDialog } from "@/components/RestartConfirmDialog";
+import { GameResultOverlay } from "@/components/GameResultOverlay";
 import { RaceLeaderboard } from "@/components/RaceLeaderboard";
 import { FloatingEmojiOverlay, FloatingEmoji } from "@/components/FloatingEmojiOverlay";
 import { CountdownOverlay } from "@/components/CountdownOverlay";
@@ -80,6 +83,9 @@ export default function SudokuApp() {
     bestScore: 0,
   });
 
+  const [showPauseDialog, setShowPauseDialog] = useState<boolean>(false);
+  const [showRestartConfirmDialog, setShowRestartConfirmDialog] = useState<boolean>(false);
+
   // Sudoku Hook
   const {
     gameState,
@@ -91,6 +97,9 @@ export default function SudokuApp() {
     inputNumber,
     eraseCell,
     undo,
+    pause,
+    resume,
+    restart,
     toggleNotesMode,
     remainingCounts,
     timeFormatted,
@@ -149,13 +158,19 @@ export default function SudokuApp() {
   }, []);
 
 
-  // Update theme class on document
+  // Update theme class and data-theme on document & body
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add("dark");
+      document.documentElement.setAttribute("data-theme", "dark");
+      document.body.classList.add("dark");
+      document.body.setAttribute("data-theme", "dark");
       localStorage.setItem("sudoku_theme", "dark");
     } else {
       document.documentElement.classList.remove("dark");
+      document.documentElement.setAttribute("data-theme", "light");
+      document.body.classList.remove("dark");
+      document.body.setAttribute("data-theme", "light");
       localStorage.setItem("sudoku_theme", "light");
     }
   }, [isDarkMode]);
@@ -360,29 +375,100 @@ export default function SudokuApp() {
     }
   };
 
+  // Pause / Resume / Restart handlers matching Flutter
+  const handleOpenPause = () => {
+    pause();
+    setShowPauseDialog(true);
+  };
+
+  const handleResumeFromPause = () => {
+    setShowPauseDialog(false);
+    resume();
+  };
+
+  const handlePromptRestart = () => {
+    setShowPauseDialog(false);
+    setShowRestartConfirmDialog(true);
+  };
+
+  const handleConfirmRestart = () => {
+    setShowRestartConfirmDialog(false);
+    handleDiscardSession();
+    restart();
+  };
+
+  const handleCancelRestart = () => {
+    setShowRestartConfirmDialog(false);
+    resume();
+  };
+
+  const handleExitFromPause = () => {
+    setShowPauseDialog(false);
+    handleDiscardSession();
+    handleBackHome();
+  };
+
   return (
-    <main className="min-h-screen flex flex-col items-center justify-start pb-6 px-3 bg-[#F6F7FB] dark:bg-[#11131A] text-[#1E2233] dark:text-[#F3F4FA] transition-colors">
+    <main
+      data-theme={isDarkMode ? "dark" : "light"}
+      className={`min-h-screen flex flex-col items-center justify-start pb-6 px-3 transition-colors ${
+        isDarkMode ? "dark bg-[#11131A] text-[#F3F4FA]" : "bg-[#F6F7FB] text-[#1E2233]"
+      }`}
+    >
       {/* Floating Emojis */}
       <FloatingEmojiOverlay emojis={floatingEmojis} />
 
       {/* 3-2-1 Countdown Overlay */}
       {showCountdown && <CountdownOverlay onComplete={handleCountdownComplete} />}
 
-      {/* Knockout Modal (Max Mistakes) */}
-      {gameState.isKnockedOut && !isSpectating && (
+      {/* Flutter Pause Dialog */}
+      {showPauseDialog && (
+        <PauseDialog
+          onResume={handleResumeFromPause}
+          onRestart={handlePromptRestart}
+          onExit={handleExitFromPause}
+          isDarkMode={isDarkMode}
+        />
+      )}
+
+      {/* Flutter Restart Confirm Dialog */}
+      {showRestartConfirmDialog && (
+        <RestartConfirmDialog
+          onConfirm={handleConfirmRestart}
+          onCancel={handleCancelRestart}
+          isDarkMode={isDarkMode}
+        />
+      )}
+
+      {/* Solo Game Result Overlay (Exact Flutter game_result_overlay.dart) */}
+      {mode === "solo_game" && (gameState.status === "won" || gameState.status === "lost") && (
+        <GameResultOverlay
+          won={gameState.status === "won"}
+          difficulty={difficulty}
+          score={gameState.score}
+          elapsedSeconds={gameState.elapsedSeconds}
+          mistakes={gameState.mistakes}
+          correct={gameState.correctCount}
+          onPlayAgain={() => startNewGame(difficulty, mistakeRule)}
+          onHome={handleBackHome}
+          isDarkMode={isDarkMode}
+        />
+      )}
+
+      {/* Multiplayer Knockout Modal (Max Mistakes) */}
+      {mode === "multiplayer_game" && gameState.isKnockedOut && !isSpectating && (
         <KnockoutOverlay
           mistakeRule={mistakeRule}
           mistakes={gameState.mistakes}
           maxMistakes={gameState.maxMistakes}
-          isMultiplayer={mode === "multiplayer_game"}
-          onSpectate={mode === "multiplayer_game" ? () => setIsSpectating(true) : undefined}
-          onRestart={mode === "solo_game" ? () => startNewGame(difficulty, mistakeRule) : undefined}
+          isMultiplayer={true}
+          onSpectate={() => setIsSpectating(true)}
           onLeave={handleBackHome}
         />
       )}
 
-      {/* Match Finished Overlay (Win / Complete) */}
-      {gameState.isFinished && (
+      {/* Multiplayer Match Finished Overlay (Win / Complete) */}
+      {mode === "multiplayer_game" && gameState.isFinished && (
         <MatchFinishedOverlay
           isWinner={true}
           rank={1}
@@ -390,12 +476,7 @@ export default function SudokuApp() {
           score={gameState.score}
           mistakes={gameState.mistakes}
           players={players}
-          isMultiplayer={mode === "multiplayer_game"}
-          onPlayAgain={
-            mode === "solo_game"
-              ? () => startNewGame(difficulty, mistakeRule)
-              : undefined
-          }
+          isMultiplayer={true}
           onBackToHome={handleBackHome}
         />
       )}
@@ -613,8 +694,8 @@ export default function SudokuApp() {
       {/* SCREEN 2: GAME SCREEN (SOLO OR MULTIPLAYER RACE)                          */}
       {/* ========================================================================= */}
       {(mode === "solo_game" || mode === "multiplayer_game") && (
-        <div className="w-full flex flex-col items-center animate-fadeIn max-w-[500px] mx-auto">
-          {/* Header Stats */}
+        <div className="w-full flex flex-col items-center animate-fadeIn max-w-[500px] md:max-w-[920px] mx-auto">
+          {/* Top Bar (Difficulty, Controls, Pause) */}
           <TopBar
             difficulty={difficulty}
             mistakeRule={mistakeRule}
@@ -628,17 +709,19 @@ export default function SudokuApp() {
             isDarkMode={isDarkMode}
             onToggleTheme={handleToggleTheme}
             onBack={handleBackHome}
+            onPause={mode === "solo_game" && gameState.status === "playing" ? handleOpenPause : undefined}
+            className="w-full max-w-[490px] md:max-w-[920px] mx-auto px-2 pt-2 pb-1 select-none"
           />
 
           {/* Spectating Banner */}
           {isSpectating && (
-            <div className="w-full max-w-[490px] mx-auto px-2 mt-2">
+            <div className="w-full max-w-[490px] md:max-w-[920px] mx-auto px-2 mt-2">
               <div className="p-3 rounded-[12px] bg-[#FF5D6C]/10 border border-[#FF5D6C]/30 text-[#FF5D6C] text-xs font-bold flex items-center justify-between">
                 <span>Spectating Match (Knocked Out by Mistakes)</span>
                 <button
                   type="button"
                   onClick={handleLeaveRoom}
-                  className="px-2 py-0.5 rounded bg-[#FF5D6C] text-white text-[11px]"
+                  className="px-2 py-0.5 rounded bg-[#FF5D6C] text-white text-[11px] cursor-pointer"
                 >
                   Leave
                 </button>
@@ -646,32 +729,78 @@ export default function SudokuApp() {
             </div>
           )}
 
-          {/* Sudoku 9x9 Board */}
-          <SudokuBoard
-            state={gameState}
-            onSelectCell={selectCell}
-            isSpectating={isSpectating}
-          />
+          {/* Flutter Widescreen 2-column layout (>= 768px) */}
+          <div className="hidden md:flex flex-row items-start justify-center gap-6 w-full max-w-[920px] mt-4 px-2">
+            {/* Left Column: Board (flex 6, max 490px) */}
+            <div className="flex-[6] flex justify-center">
+              <div className="w-full max-w-[490px]">
+                <SudokuBoard
+                  state={gameState}
+                  onSelectCell={selectCell}
+                  isSpectating={isSpectating}
+                  isDarkMode={isDarkMode}
+                />
+              </div>
+            </div>
 
-          {/* Number Pad & Controls */}
-          <NumberPad
-            remainingCounts={remainingCounts}
-            isNotesMode={isNotesMode}
-            onToggleNotes={toggleNotesMode}
-            onInputNumber={inputNumber}
-            onErase={eraseCell}
-            onUndo={undo}
-            disabled={gameState.isFinished || (gameState.isKnockedOut && isSpectating)}
-          />
+            {/* Right Column: Controls + 3x3 Grid (flex 4, max 290px) */}
+            <div className="flex-[4] max-w-[290px] flex flex-col pt-1">
+              <NumberPad
+                remainingCounts={remainingCounts}
+                isNotesMode={isNotesMode}
+                onToggleNotes={toggleNotesMode}
+                onInputNumber={inputNumber}
+                onErase={eraseCell}
+                onUndo={undo}
+                disabled={gameState.status !== "playing" || isSpectating}
+                isGrid={true}
+                isDarkMode={isDarkMode}
+                showToolbar={true}
+                toolbarOrder="undo-erase-pencil"
+              />
+            </div>
+          </div>
 
-          {/* Multiplayer Race Progress Leaderboard at the bottom */}
+          {/* Flutter Mobile layout (< 768px) */}
+          <div className="flex md:hidden flex-col items-center w-full max-w-[500px]">
+            {/* Board (max 480px) */}
+            <div className="w-full max-w-[480px]">
+              <SudokuBoard
+                state={gameState}
+                onSelectCell={selectCell}
+                isSpectating={isSpectating}
+                isDarkMode={isDarkMode}
+              />
+            </div>
+
+            {/* Mobile Toolbar + 1-row NumberPad */}
+            <div className="w-full max-w-[480px] mt-2">
+              <NumberPad
+                remainingCounts={remainingCounts}
+                isNotesMode={isNotesMode}
+                onToggleNotes={toggleNotesMode}
+                onInputNumber={inputNumber}
+                onErase={eraseCell}
+                onUndo={undo}
+                disabled={gameState.status !== "playing" || isSpectating}
+                isGrid={false}
+                isDarkMode={isDarkMode}
+                showToolbar={true}
+                toolbarOrder="undo-pencil-erase"
+              />
+            </div>
+          </div>
+
+          {/* Multiplayer Race Progress Leaderboard at bottom */}
           {mode === "multiplayer_game" && (
-            <RaceLeaderboard
-              players={players}
-              myId={roomService.getMyPeerId()}
-              onSendEmoji={handleSendEmoji}
-              latencyMs={latencyMs}
-            />
+            <div className="w-full max-w-[500px] md:max-w-[920px] mx-auto mt-4 px-2">
+              <RaceLeaderboard
+                players={players}
+                myId={roomService.getMyPeerId()}
+                onSendEmoji={handleSendEmoji}
+                latencyMs={latencyMs}
+              />
+            </div>
           )}
         </div>
       )}

@@ -8,12 +8,14 @@ interface SudokuBoardProps {
   state: SudokuGameState;
   onSelectCell: (index: number) => void;
   isSpectating?: boolean;
+  isDarkMode?: boolean;
 }
 
 export const SudokuBoard: React.FC<SudokuBoardProps> = ({
   state,
   onSelectCell,
   isSpectating = false,
+  isDarkMode = false,
 }) => {
   const { board, puzzle, selectedCell, candidates, incorrectCells } = state;
   const [hasPlayedInitialSound, setHasPlayedInitialSound] = useState(false);
@@ -32,10 +34,43 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = ({
   const selBoxRow = selRow !== null ? Math.floor(selRow / 3) * 3 : null;
   const selBoxCol = selCol !== null ? Math.floor(selCol / 3) * 3 : null;
 
+  // Exact BoardPalette from lib/core/theme/app_colors.dart
+  const palette = isDarkMode
+    ? {
+        background: "#1B1E29",
+        boxAltBackground: "#20232F",
+        gridLineThin: "#2E3445",
+        gridLineThick: "#7A869E",
+        givenText: "#F3F4FA",
+        playerText: "#4D9CFF",
+        selectedCell: "#32486E",
+        relatedCell: "#232A3B",
+        sameNumberCell: "#2E3F5F",
+        errorCell: "#4C222B",
+        errorText: "#FF8A93",
+      }
+    : {
+        background: "#FFFFFF",
+        boxAltBackground: "#F1F3FA",
+        gridLineThin: "#D6DCED",
+        gridLineThick: "#344861",
+        givenText: "#1E2233",
+        playerText: "#0072E3",
+        selectedCell: "#BBDEFB",
+        relatedCell: "#E8F0FE",
+        sameNumberCell: "#CCE5FF",
+        errorCell: "#FFCDD2",
+        errorText: "#FF5D6C",
+      };
+
   return (
     <div className="w-full max-w-[490px] mx-auto select-none aspect-square p-2">
       <div
-        className="w-full h-full grid grid-cols-9 grid-rows-9 rounded-[12px] overflow-hidden transition-colors shadow-[0_8px_18px_rgba(0,0,0,0.08)] bg-white dark:bg-[#1B1E29] border-[2.5px] border-[#344861] dark:border-[#7A869E]"
+        className="w-full h-full grid grid-cols-9 grid-rows-9 rounded-[12px] overflow-hidden transition-colors shadow-[0_8px_18px_rgba(0,0,0,0.08)] border-[2.5px]"
+        style={{
+          backgroundColor: palette.background,
+          borderColor: palette.gridLineThick,
+        }}
       >
         {Array.from({ length: 81 }).map((_, index) => {
           const row = Math.floor(index / 9);
@@ -54,34 +89,24 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = ({
           const isIncorrect = incorrectCells.includes(index);
           const cellCandidates = candidates[index] || [];
 
-          // BoardPalette color resolution (Light vs Dark)
-          // Background Color priority:
-          // 1. isSelected: #BBDEFB (light) / #32486E (dark)
-          // 2. isIncorrect: #FFCDD2 (light) / #4C222B (dark)
-          // 3. isSameVal: #CCE5FF (light) / #2E3F5F (dark)
-          // 4. isRelated: #E8F0FE (light) / #232A3B (dark)
-          let bgClass = "bg-transparent";
+          // Cell Background color priority
+          let cellBg = "transparent";
           if (isSelected) {
-            bgClass = "bg-[#BBDEFB] dark:bg-[#32486E]";
+            cellBg = palette.selectedCell;
           } else if (isIncorrect) {
-            bgClass = "bg-[#FFCDD2] dark:bg-[#4C222B]";
+            cellBg = palette.errorCell;
           } else if (isSameVal) {
-            bgClass = "bg-[#CCE5FF] dark:bg-[#2E3F5F]";
+            cellBg = palette.sameNumberCell;
           } else if (isRelated) {
-            bgClass = "bg-[#E8F0FE] dark:bg-[#232A3B]";
+            cellBg = palette.relatedCell;
           }
 
-          // Text Color priority:
-          // isIncorrect: #FF5D6C (light) / #FF8A93 (dark)
-          // isGiven: #1E2233 (light) / #F3F4FA (dark)
-          // playerText: #0072E3 (light) / #4D9CFF (dark)
-          let textClass = "";
+          // Text color priority
+          let cellTextColor = palette.playerText;
           if (isIncorrect) {
-            textClass = "text-[#FF5D6C] dark:text-[#FF8A93]";
+            cellTextColor = palette.errorText;
           } else if (isGiven) {
-            textClass = "text-[#1E2233] dark:text-[#F3F4FA]";
-          } else {
-            textClass = "text-[#0072E3] dark:text-[#4D9CFF]";
+            cellTextColor = palette.givenText;
           }
 
           // Exact Flutter Board Borders:
@@ -91,27 +116,39 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = ({
           const isRightThinEdge = (col + 1) % 3 !== 0 && col < 8;
           const isBottomThinEdge = (row + 1) % 3 !== 0 && row < 8;
 
+          const borderRightStyle = isRightBoxEdge
+            ? `2px solid ${palette.gridLineThick}`
+            : isRightThinEdge
+            ? `1px solid ${palette.gridLineThin}`
+            : "none";
+
+          const borderBottomStyle = isBottomBoxEdge
+            ? `2px solid ${palette.gridLineThick}`
+            : isBottomThinEdge
+            ? `1px solid ${palette.gridLineThin}`
+            : "none";
+
           return (
             <div
               key={index}
               onClick={() => !isSpectating && onSelectCell(index)}
-              className={`relative flex items-center justify-center cursor-pointer transition-colors duration-75 ${bgClass} ${
-                isRightBoxEdge ? "border-r-[2px] border-r-[#344861] dark:border-r-[#7A869E]" : ""
-              } ${
-                isRightThinEdge ? "border-r border-r-[#D6DCED] dark:border-r-[#2E3445]" : ""
-              } ${
-                isBottomBoxEdge ? "border-b-[2px] border-b-[#344861] dark:border-b-[#7A869E]" : ""
-              } ${
-                isBottomThinEdge ? "border-b border-b-[#D6DCED] dark:border-b-[#2E3445]" : ""
-              }`}
+              style={{
+                backgroundColor: cellBg,
+                borderRight: borderRightStyle,
+                borderBottom: borderBottomStyle,
+              }}
+              className="relative flex items-center justify-center cursor-pointer transition-colors duration-75 select-none"
             >
               {val !== 0 ? (
-                /* Regular (non-bold) 400 weight Sudoku font */
+                /* Regular 400 weight Sudoku font matching Flutter Text */
                 <span
-                  className={`text-xl sm:text-2xl font-normal leading-none transition-transform duration-100 ${textClass} ${
+                  className={`text-xl sm:text-2xl leading-none transition-transform duration-100 ${
                     isIncorrect ? "animate-errorShake" : ""
                   }`}
-                  style={{ fontWeight: 400 }}
+                  style={{
+                    color: cellTextColor,
+                    fontWeight: 400,
+                  }}
                 >
                   {val}
                 </span>
@@ -121,7 +158,11 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = ({
                   {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
                     <div
                       key={num}
-                      className="flex items-center justify-center text-[8px] sm:text-[9.5px] leading-none font-normal text-[#0072E3]/90 dark:text-[#4D9CFF]/90"
+                      style={{
+                        color: palette.playerText,
+                        opacity: 0.9,
+                      }}
+                      className="flex items-center justify-center text-[8px] sm:text-[9.5px] leading-none font-normal"
                     >
                       {cellCandidates.includes(num) ? num : ""}
                     </div>
