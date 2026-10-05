@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useSyncExternalStore } from "react";
 import {
   Users,
   Play,
@@ -30,10 +30,13 @@ import { FloatingEmojiOverlay, FloatingEmoji } from "@/components/FloatingEmojiO
 import { CountdownOverlay } from "@/components/CountdownOverlay";
 import { KnockoutOverlay } from "@/components/KnockoutOverlay";
 import { MatchFinishedOverlay } from "@/components/MatchFinishedOverlay";
-import { MultiplayerMenuModal } from "@/components/MultiplayerMenuModal";
-import { MultiplayerLobby } from "@/components/MultiplayerLobby";
+import { MultiplayerMenuScreen } from "@/components/MultiplayerMenuScreen";
+import { MultiplayerLobbyScreen } from "@/components/MultiplayerLobbyScreen";
+import { MultiplayerPostGameScreen } from "@/components/MultiplayerPostGameScreen";
 
-type AppMode = "home" | "solo_game" | "multiplayer_lobby" | "multiplayer_game";
+type AppMode = "home" | "solo_game" | "multiplayer_menu" | "multiplayer_lobby" | "multiplayer_game" | "multiplayer_postgame";
+
+const QUICK_REACTION_EMOJIS = ["🔥", "👏", "🤯", "😎", "😱", "💀"];
 
 interface SavedSession {
   difficulty: Difficulty;
@@ -52,18 +55,26 @@ interface PlayerStats {
   bestScore: number;
 }
 
+let nextEmojiId = 0;
+function spawnFloatingEmojiItem(emoji: string, senderName: string): FloatingEmoji {
+  nextEmojiId += 1;
+  const id = `fe_${nextEmojiId}_${(nextEmojiId * 997) % 10000}`;
+  const leftPercent = 15 + ((nextEmojiId * 37) % 65);
+  return { id, emoji, senderName, leftPercent };
+}
+
 export default function SudokuApp() {
-  // Stable server-side default (avoids hydration mismatch).
-  // The real theme is applied from localStorage after mount via useEffect.
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
-  // Tracks whether we're past first render so we don't show theme-sensitive
-  // content until the client has read localStorage.
-  const [mounted, setMounted] = useState<boolean>(false);
+  const mounted = useSyncExternalStore(
+    () => () => { },
+    () => true,
+    () => false
+  );
   const [isMuted, setIsMuted] = useState<boolean>(false);
 
   // App navigation state
   const [mode, setMode] = useState<AppMode>("home");
-  const [showMultiplayerMenu, setShowMultiplayerMenu] = useState<boolean>(false);
+  const [inviteRoomCode, setInviteRoomCode] = useState<string>("");
 
   // Settings
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
@@ -78,6 +89,9 @@ export default function SudokuApp() {
   const [floatingEmojis, setFloatingEmojis] = useState<FloatingEmoji[]>([]);
   const [showCountdown, setShowCountdown] = useState<boolean>(false);
   const [isSpectating, setIsSpectating] = useState<boolean>(false);
+  const [postGameWinner, setPostGameWinner] = useState<PlayerProgress | null>(null);
+  const [postGameStandings, setPostGameStandings] = useState<PlayerProgress[]>([]);
+  const [postGameAllDefeated, setPostGameAllDefeated] = useState<boolean>(false);
 
   // Saved Session & Stats
   const [activeSession, setActiveSession] = useState<SavedSession | null>(null);
@@ -95,7 +109,6 @@ export default function SudokuApp() {
   const {
     gameState,
     isGenerating,
-    selectedCell,
     isNotesMode,
     startNewGame,
     startWithPuzzle,
@@ -114,24 +127,47 @@ export default function SudokuApp() {
     shakeAnimation,
   } = useSudokuGame(difficulty, mistakeRule);
 
-  // Load user settings, stats, and session on mount
+  // Sync client storage and settings after hydration
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedTheme = localStorage.getItem("sudoku_theme");
+    queueMicrotask(() => {
+      if (typeof window === "undefined") return;
+
+      const savedTheme = localStorage.getItem("sudoku_theme") || sessionStorage.getItem("sudoku_theme");
       const savedMute = localStorage.getItem("sudoku_muted");
       const savedNick = localStorage.getItem("sudoku_nickname");
       const savedStatsStr = localStorage.getItem("sudoku_stats");
-      const savedSessionStr = localStorage.getItem("sudoku_active_session");
+      const savedSessionStr = localStorage.getItem("sudoku_active_session") || sessionStorage.getItem("sudoku_active_session");
 
-      // Resolve theme from localStorage / system preference now that we're on the client
-      if (savedTheme) {
-        setIsDarkMode(savedTheme === "dark");
+      let resolvedDark = true;
+      if (savedTheme === "dark") {
+        resolvedDark = true;
+      } else if (savedTheme === "light") {
+        resolvedDark = false;
+      } else if (savedSessionStr) {
+        try {
+          const parsed = JSON.parse(savedSessionStr);
+          if (parsed?.theme) {
+            resolvedDark = parsed.theme === "dark";
+          } else {
+            resolvedDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          }
+        } catch {
+          resolvedDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        }
       } else {
-        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-        setIsDarkMode(prefersDark);
+        resolvedDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
       }
-      // Mark as mounted so theme-sensitive UI can render
-      setMounted(true);
+
+      setIsDarkMode(resolvedDark);
+      const themeStr = resolvedDark ? "dark" : "light";
+      document.documentElement.classList.toggle("dark", resolvedDark);
+      document.documentElement.setAttribute("data-theme", themeStr);
+      if (document.body) {
+        document.body.classList.toggle("dark", resolvedDark);
+        document.body.setAttribute("data-theme", themeStr);
+      }
+      localStorage.setItem("sudoku_theme", themeStr);
+      sessionStorage.setItem("sudoku_theme", themeStr);
 
       if (savedMute) {
         const muted = savedMute === "true";
@@ -155,24 +191,13 @@ export default function SudokuApp() {
 
       if (savedSessionStr) {
         try {
-          const parsed = JSON.parse(savedSessionStr);
-          setActiveSession(parsed);
-          if (parsed.theme && !savedTheme) {
-            setIsDarkMode(parsed.theme === "dark");
-          }
+          setActiveSession(JSON.parse(savedSessionStr));
         } catch { }
       }
-
-      // Check URL hash for direct join (#join=123456 or #room=123456)
-      const hash = window.location.hash;
-      const match = hash.match(/(?:join|room)=([0-9]{6})/);
-      if (match && match[1]) {
-        handleJoinRoom(match[1]).catch(() => { });
-      }
-    }
+    });
   }, []);
 
-  // Update theme class and data-theme on document & body and sync to localStorage
+  // Sync theme class and data-theme on document & body and save to storage
   useEffect(() => {
     if (typeof window === "undefined") return;
     const themeStr = isDarkMode ? "dark" : "light";
@@ -183,6 +208,7 @@ export default function SudokuApp() {
       document.body.setAttribute("data-theme", themeStr);
     }
     localStorage.setItem("sudoku_theme", themeStr);
+    sessionStorage.setItem("sudoku_theme", themeStr);
   }, [isDarkMode]);
 
   const handleToggleTheme = () => {
@@ -190,12 +216,20 @@ export default function SudokuApp() {
       const next = !prev;
       const themeStr = next ? "dark" : "light";
       localStorage.setItem("sudoku_theme", themeStr);
+      sessionStorage.setItem("sudoku_theme", themeStr);
       document.documentElement.classList.toggle("dark", next);
       document.documentElement.setAttribute("data-theme", themeStr);
       if (document.body) {
         document.body.classList.toggle("dark", next);
         document.body.setAttribute("data-theme", themeStr);
       }
+      setActiveSession((sess) => {
+        if (!sess) return null;
+        const updated = { ...sess, theme: themeStr as "dark" | "light" };
+        localStorage.setItem("sudoku_active_session", JSON.stringify(updated));
+        sessionStorage.setItem("sudoku_active_session", JSON.stringify(updated));
+        return updated;
+      });
       return next;
     });
   };
@@ -218,7 +252,7 @@ export default function SudokuApp() {
     startNewGame(diff, mistakeRule);
     setMode("solo_game");
 
-    // Save active session with current theme
+    // Save active session with current theme to both localStorage and sessionStorage
     const sess: SavedSession = {
       difficulty: diff,
       mistakeRule,
@@ -229,12 +263,25 @@ export default function SudokuApp() {
     };
     setActiveSession(sess);
     localStorage.setItem("sudoku_active_session", JSON.stringify(sess));
+    sessionStorage.setItem("sudoku_active_session", JSON.stringify(sess));
   };
 
   const handleResumeSession = () => {
     if (!activeSession) return;
     setDifficulty(activeSession.difficulty);
     setMistakeRule(activeSession.mistakeRule);
+    if (activeSession.theme) {
+      const isDark = activeSession.theme === "dark";
+      setIsDarkMode(isDark);
+      localStorage.setItem("sudoku_theme", activeSession.theme);
+      sessionStorage.setItem("sudoku_theme", activeSession.theme);
+      document.documentElement.classList.toggle("dark", isDark);
+      document.documentElement.setAttribute("data-theme", activeSession.theme);
+      if (document.body) {
+        document.body.classList.toggle("dark", isDark);
+        document.body.setAttribute("data-theme", activeSession.theme);
+      }
+    }
     if (activeSession.isMultiplayer && activeSession.roomCode) {
       handleJoinRoom(activeSession.roomCode);
     } else {
@@ -246,29 +293,50 @@ export default function SudokuApp() {
   const handleDiscardSession = () => {
     setActiveSession(null);
     localStorage.removeItem("sudoku_active_session");
+    sessionStorage.removeItem("sudoku_active_session");
   };
 
   // P2P Room callbacks setup
   const setupRoomListeners = useCallback(() => {
     roomService.onPlayersChanged = (updated) => {
-      setPlayers(updated);
+      setPlayers([...updated]);
+    };
+
+    roomService.onSettingsChanged = (diff: Difficulty, rule: MistakeRule) => {
+      setDifficulty(diff);
+      setMistakeRule(rule);
     };
 
     roomService.onGameStarted = (puzzle: SudokuPuzzle, rule: MistakeRule) => {
       setMistakeRule(rule);
       setDifficulty(puzzle.difficulty);
       startWithPuzzle(puzzle, rule);
+      setMode("multiplayer_game");
       setShowCountdown(true);
     };
 
     roomService.onEmojiReceived = (emoji: string, senderName: string) => {
-      const id = `${Date.now()}-${Math.random()}`;
-      const leftPercent = 15 + Math.random() * 70;
-      setFloatingEmojis((prev) => [...prev, { id, emoji, senderName, leftPercent }]);
+      const item = spawnFloatingEmojiItem(emoji, senderName);
+      setFloatingEmojis((prev) => [...prev, item]);
 
       setTimeout(() => {
-        setFloatingEmojis((prev) => prev.filter((item) => item.id !== id));
+        setFloatingEmojis((prev) => prev.filter((entry) => entry.id !== item.id));
       }, 2800);
+    };
+
+    roomService.onMatchEnded = (matchWinner, matchStandings, matchAllDefeated) => {
+      setPostGameWinner(matchWinner);
+      setPostGameStandings(matchStandings);
+      setPostGameAllDefeated(matchAllDefeated);
+      setTimeout(() => {
+        setMode("multiplayer_postgame");
+      }, 700);
+    };
+
+    roomService.onReturnToLobby = () => {
+      setIsSpectating(false);
+      setPlayers([...roomService.playersList]);
+      setMode("multiplayer_lobby");
     };
 
     roomService.onLatencyUpdated = (ping) => {
@@ -277,9 +345,10 @@ export default function SudokuApp() {
   }, [startWithPuzzle]);
 
   // Host a room
-  const handleHostRoom = async () => {
+  const handleHostRoom = async (diff: Difficulty, rule: MistakeRule) => {
     try {
-      setShowMultiplayerMenu(false);
+      setDifficulty(diff);
+      setMistakeRule(rule);
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       setRoomCode(code);
       setIsHost(true);
@@ -287,50 +356,115 @@ export default function SudokuApp() {
       window.location.hash = `#room=${code}`;
 
       setupRoomListeners();
+      const p = generateSudoku(diff);
+      roomService.puzzle = p;
+      roomService.mistakeRule = rule;
       await roomService.initializeRoom(code, nickname, true);
+      setPlayers([...roomService.playersList]);
       setMode("multiplayer_lobby");
     } catch (err) {
       console.warn("[Multiplayer] Host room creation failed:", err);
-      window.location.hash = "";
-      setMode("home");
-      alert("Could not connect to multiplayer network. Please try again.");
+      if (typeof window !== "undefined") {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+      throw err;
     }
   };
 
   // Join a room
-  const handleJoinRoom = async (code: string) => {
+  const handleJoinRoom = async (code: string, chosenNickname?: string) => {
     try {
-      setShowMultiplayerMenu(false);
-      setRoomCode(code);
+      const cleanCode = code.trim();
+      const finalName = chosenNickname?.trim() || nickname.trim() || "Player";
+      setRoomCode(cleanCode);
       setIsHost(false);
       setIsSpectating(false);
-      window.location.hash = `#room=${code}`;
+      window.location.hash = `#room=${cleanCode}`;
 
       setupRoomListeners();
-      await roomService.initializeRoom(code, nickname, false);
+      await roomService.initializeRoom(cleanCode, finalName, false);
+      setPlayers([...roomService.playersList]);
+      if (roomService.puzzle) {
+        setDifficulty(roomService.puzzle.difficulty);
+      }
+      if (roomService.mistakeRule) {
+        setMistakeRule(roomService.mistakeRule);
+      }
       setMode("multiplayer_lobby");
     } catch (err) {
       console.warn("[Multiplayer] Join room failed:", err);
-      window.location.hash = "";
-      setMode("home");
-      alert("Could not join room. Ensure the host is in the lobby and the code is correct.");
+      if (typeof window !== "undefined") {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+      throw err;
     }
   };
 
+  // Check URL hash for direct join (#join=123456 or #room=123456)
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash;
+      const match = hash.match(/(?:join|room)=([0-9]{6})/);
+      if (match && match[1]) {
+        setInviteRoomCode(match[1]);
+        setMode("multiplayer_menu");
+      }
+    };
+
+    window.addEventListener("hashchange", handleHash);
+    queueMicrotask(handleHash);
+
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
 
   // Host launches game
-  const handleHostStartMatch = () => {
+  const handleHostStartMatch = useCallback(() => {
     const puzzle = generateSudoku(difficulty);
     roomService.startGame(puzzle, mistakeRule);
     startWithPuzzle(puzzle, mistakeRule);
-    setShowCountdown(true);
-  };
-
-  // Countdown completed -> switch to multiplayer game screen
-  const handleCountdownComplete = () => {
-    setShowCountdown(false);
     setMode("multiplayer_game");
-  };
+    setShowCountdown(true);
+  }, [difficulty, mistakeRule, startWithPuzzle]);
+
+  // Countdown completed -> remove countdown overlay
+  const handleCountdownComplete = useCallback(() => {
+    setShowCountdown(false);
+  }, []);
+
+  // Leave room or exit match
+  const handleLeaveRoom = useCallback(() => {
+    roomService.disconnect();
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+    setMode("home");
+    setIsSpectating(false);
+    handleDiscardSession();
+  }, []);
+
+  // Host launches rematch with newly generated puzzle
+  const handleHostRematch = useCallback(() => {
+    const newPuzzle = generateSudoku(difficulty);
+    roomService.startRematch(newPuzzle);
+    startWithPuzzle(newPuzzle, mistakeRule);
+    setIsSpectating(false);
+    setMode("multiplayer_game");
+    setShowCountdown(true);
+  }, [difficulty, mistakeRule, startWithPuzzle]);
+
+  // Host returns everyone to lobby to adjust settings
+  const handleReturnToLobby = useCallback(() => {
+    roomService.returnToLobby();
+    setIsSpectating(false);
+    setPlayers([...roomService.playersList]);
+    setMode("multiplayer_lobby");
+  }, []);
+
+  // Exit from post-match screen to home
+  const handleExitPostGame = useCallback(() => {
+    handleLeaveRoom();
+    setMode("home");
+  }, [handleLeaveRoom]);
 
   // Synchronize player progress to room peers
   useEffect(() => {
@@ -340,19 +474,40 @@ export default function SudokuApp() {
         (cell, idx) => cell !== 0 && cell === gameState.puzzle!.solution[idx]
       ).length;
       const progress = totalCells > 0 ? filledCorrect / totalCells : 0;
+      const totalAttempts = filledCorrect + gameState.mistakes;
+      const accuracyPercent = totalAttempts > 0 ? Math.round((filledCorrect / totalAttempts) * 100) : 100;
+      const cellsPerMinute =
+        gameState.elapsedSeconds > 0
+          ? Math.round((filledCorrect / (gameState.elapsedSeconds / 60)) * 10) / 10
+          : 0;
 
       roomService.broadcastProgress(
         progress,
         gameState.mistakes,
         gameState.isKnockedOut,
-        gameState.isFinished
+        gameState.isFinished,
+        {
+          timeFormatted,
+          accuracyPercent,
+          cellsPerMinute,
+        }
       );
     }
-  }, [mode, gameState.board, gameState.mistakes, gameState.isKnockedOut, gameState.isFinished, gameState.puzzle]);
+  }, [
+    mode,
+    gameState.board,
+    gameState.mistakes,
+    gameState.isKnockedOut,
+    gameState.isFinished,
+    gameState.puzzle,
+    gameState.elapsedSeconds,
+    timeFormatted,
+  ]);
 
   // When game finishes, update statistics
   useEffect(() => {
     if (gameState.isFinished) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStats((prev) => {
         const next: PlayerStats = {
           totalGamesPlayed: prev.totalGamesPlayed + 1,
@@ -368,31 +523,23 @@ export default function SudokuApp() {
   }, [gameState.isFinished, gameState.score, timeFormatted]);
 
   // Send emoji reaction
-  const handleSendEmoji = (emoji: string) => {
+  const handleSendEmoji = useCallback((emoji: string) => {
     roomService.broadcastEmoji(emoji);
-    const id = `${Date.now()}-${Math.random()}`;
-    setFloatingEmojis((prev) => [
-      ...prev,
-      { id, emoji, senderName: "You", leftPercent: 20 + Math.random() * 60 },
-    ]);
+    const item = spawnFloatingEmojiItem(emoji, "You");
+    setFloatingEmojis((prev) => [...prev, item]);
     setTimeout(() => {
-      setFloatingEmojis((prev) => prev.filter((item) => item.id !== id));
+      setFloatingEmojis((prev) => prev.filter((entry) => entry.id !== item.id));
     }, 2800);
-  };
-
-  // Leave room or exit match
-  const handleLeaveRoom = () => {
-    roomService.disconnect();
-    window.location.hash = "";
-    setMode("home");
-    setIsSpectating(false);
-    handleDiscardSession();
-  };
+  }, []);
 
   const handleBackHome = () => {
     if (mode === "multiplayer_game" || mode === "multiplayer_lobby") {
       handleLeaveRoom();
     } else {
+      if (typeof window !== "undefined") {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+      setInviteRoomCode("");
       setMode("home");
     }
   };
@@ -503,29 +650,81 @@ export default function SudokuApp() {
         />
       )}
 
-      {/* Multiplayer Menu Modal */}
-      {showMultiplayerMenu && (
-        <MultiplayerMenuModal
+      {/* Multiplayer Menu Screen (Host / Join / Edit Nickname) */}
+      {mode === "multiplayer_menu" && (
+        <MultiplayerMenuScreen
           initialNickname={nickname}
           onSaveNickname={handleSaveNickname}
           onHost={handleHostRoom}
           onJoin={handleJoinRoom}
-          onClose={() => setShowMultiplayerMenu(false)}
+          onBack={handleBackHome}
+          initialRoomCode={inviteRoomCode}
+          initialTab={inviteRoomCode ? "join" : "host"}
         />
       )}
 
-      {/* Multiplayer Lobby Modal */}
+      {/* Multiplayer Lobby Screen (Waiting for match start) */}
       {mode === "multiplayer_lobby" && (
-        <MultiplayerLobby
+        <MultiplayerLobbyScreen
           isHost={isHost}
           roomCode={roomCode}
           players={players}
           difficulty={difficulty}
           mistakeRule={mistakeRule}
-          onDifficultyChange={(d) => setDifficulty(d)}
-          onMistakeRuleChange={(r) => setMistakeRule(r)}
+          onDifficultyChange={(d) => {
+            setDifficulty(d);
+            roomService.changeDifficulty(d);
+          }}
+          onMistakeRuleChange={(r) => {
+            setMistakeRule(r);
+            roomService.changeMistakeRule(r);
+          }}
           onStartMatch={handleHostStartMatch}
           onLeave={handleLeaveRoom}
+        />
+      )}
+
+      {/* Multiplayer Post-Game Celebration & Podium Screen */}
+      {mode === "multiplayer_postgame" && (
+        <MultiplayerPostGameScreen
+          isHost={isHost}
+          roomCode={roomCode}
+          myId={roomService.localPlayerId}
+          difficulty={difficulty}
+          mistakeRule={mistakeRule}
+          winner={postGameWinner}
+          standings={postGameStandings.length > 0 ? postGameStandings : players}
+          allDefeated={postGameAllDefeated}
+          myStats={{
+            timeFormatted,
+            accuracyPercent:
+              gameState.board.filter((c, i) => c !== 0 && c === gameState.puzzle?.solution[i]).length +
+                gameState.mistakes >
+              0
+                ? Math.round(
+                    (gameState.board.filter((c, i) => c !== 0 && c === gameState.puzzle?.solution[i]).length /
+                      (gameState.board.filter((c, i) => c !== 0 && c === gameState.puzzle?.solution[i]).length +
+                        gameState.mistakes)) *
+                      100
+                  )
+                : 100,
+            cellsPerMinute:
+              gameState.elapsedSeconds > 0
+                ? Math.round(
+                    (gameState.board.filter((c, i) => c !== 0 && c === gameState.puzzle?.solution[i]).length /
+                      (gameState.elapsedSeconds / 60)) *
+                      10
+                  ) / 10
+                : 0,
+            mistakes: gameState.mistakes,
+            lives: gameState.lives,
+            isCompleted: gameState.isFinished,
+            isDefeated: gameState.isKnockedOut,
+            rank: players.find((p) => p.id === roomService.localPlayerId)?.rank || 1,
+          }}
+          onRematch={handleHostRematch}
+          onReturnToLobby={handleReturnToLobby}
+          onExitHome={handleExitPostGame}
         />
       )}
 
@@ -533,7 +732,7 @@ export default function SudokuApp() {
       {/* SCREEN 1: FLUTTER HOME SCREEN                                             */}
       {/* ========================================================================= */}
       {mode === "home" && (
-        <div className="w-full max-w-[520px] mx-auto pt-6 px-3 flex flex-col animate-fadeIn">
+        <div className="w-full max-w-[520px] lg:max-w-[580px] mx-auto pt-6 px-3 flex flex-col animate-fadeIn">
           {/* Header (Flutter exact: 'Sudoku' / 'Duel' in primary color) */}
           <div className="w-full flex items-center justify-between mb-6">
             <div className="flex flex-col">
@@ -548,11 +747,12 @@ export default function SudokuApp() {
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
+                suppressHydrationWarning
                 onClick={handleToggleMute}
                 className="p-2.5 rounded-full text-[#1E2233] dark:text-[#F3F4FA] hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition"
-                title={isMuted ? "Unmute Sound" : "Mute Sound"}
+                title={mounted && isMuted ? "Unmute Sound" : "Mute Sound"}
               >
-                {isMuted ? (
+                {mounted && isMuted ? (
                   <VolumeX className="w-[22px] h-[22px] text-[#FF5D6C]" />
                 ) : (
                   <Volume2 className="w-[22px] h-[22px]" />
@@ -577,7 +777,7 @@ export default function SudokuApp() {
           </div>
 
           {/* Active Session Resume Banner (Flutter _buildActiveSessionBanner) */}
-          {activeSession && (
+          {mounted && activeSession && (
             <div className="mb-6 p-4 rounded-[16px] bg-[#5B6CFF]/10 dark:bg-[#7C8CFF]/12 border border-[#5B6CFF]/25 flex items-center justify-between shadow-xs">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-[#5B6CFF] text-white flex items-center justify-center">
@@ -616,7 +816,7 @@ export default function SudokuApp() {
 
           {/* 1v1 P2P Multiplayer Card (Exact Flutter LinearGradient & styling) */}
           <div
-            onClick={() => setShowMultiplayerMenu(true)}
+            onClick={() => setMode("multiplayer_menu")}
             className="w-full mb-7 p-5 rounded-[20px] bg-gradient-to-br from-[#5B6CFF] to-[#7585FF] dark:from-[#38437D] dark:to-[#272F55] text-white shadow-[0_6px_16px_rgba(91,108,255,0.3)] cursor-pointer active:scale-[0.99] transition-all flex items-center justify-between"
           >
             <div className="flex items-center gap-4">
@@ -679,7 +879,7 @@ export default function SudokuApp() {
             </h4>
             <div className="grid grid-cols-2 gap-y-4 gap-x-4">
               <div>
-                <div className="text-[26px] font-bold text-[#1E2233] dark:text-[#F3F4FA] leading-tight">
+                <div suppressHydrationWarning className="text-[26px] font-bold text-[#1E2233] dark:text-[#F3F4FA] leading-tight">
                   {stats.totalGamesPlayed}
                 </div>
                 <span className="text-xs text-[#1E2233]/60 dark:text-[#F3F4FA]/60">
@@ -687,7 +887,7 @@ export default function SudokuApp() {
                 </span>
               </div>
               <div>
-                <div className="text-[26px] font-bold text-[#1E2233] dark:text-[#F3F4FA] leading-tight">
+                <div suppressHydrationWarning className="text-[26px] font-bold text-[#1E2233] dark:text-[#F3F4FA] leading-tight">
                   {stats.totalGamesWon}
                 </div>
                 <span className="text-xs text-[#1E2233]/60 dark:text-[#F3F4FA]/60">
@@ -695,7 +895,7 @@ export default function SudokuApp() {
                 </span>
               </div>
               <div>
-                <div className="text-[26px] font-bold font-mono text-[#1E2233] dark:text-[#F3F4FA] leading-tight">
+                <div suppressHydrationWarning className="text-[26px] font-bold font-mono text-[#1E2233] dark:text-[#F3F4FA] leading-tight">
                   {stats.bestTime}
                 </div>
                 <span className="text-xs text-[#1E2233]/60 dark:text-[#F3F4FA]/60">
@@ -703,7 +903,7 @@ export default function SudokuApp() {
                 </span>
               </div>
               <div>
-                <div className="text-[26px] font-bold text-[#1E2233] dark:text-[#F3F4FA] leading-tight">
+                <div suppressHydrationWarning className="text-[26px] font-bold text-[#1E2233] dark:text-[#F3F4FA] leading-tight">
                   {stats.bestScore > 0 ? stats.bestScore : "--"}
                 </div>
                 <span className="text-xs text-[#1E2233]/60 dark:text-[#F3F4FA]/60">
@@ -719,7 +919,7 @@ export default function SudokuApp() {
       {/* SCREEN 2: GAME SCREEN (SOLO OR MULTIPLAYER RACE)                          */}
       {/* ========================================================================= */}
       {(mode === "solo_game" || mode === "multiplayer_game") && (
-        <div className="w-full flex flex-col items-center animate-fadeIn max-w-[500px] md:max-w-[920px] mx-auto">
+        <div className="w-full flex flex-col items-center animate-fadeIn max-w-[500px] md:max-w-[780px] lg:max-w-[820px] mx-auto">
           {/* Top Bar (Difficulty, Controls, Pause) — matches Flutter exact layout */}
           <TopBar
             difficulty={difficulty}
@@ -771,23 +971,21 @@ export default function SudokuApp() {
           {!isGenerating && (
             <>
               {/* Flutter Widescreen 2-column layout (>= 768px): Board LEFT, Controls RIGHT */}
-              <div className="hidden md:flex flex-row items-start justify-center gap-6 w-full mt-4 px-2">
-                {/* Left Column: Board (flex 6, max 490px) */}
-                <div className="flex-[6] flex justify-center">
-                  <div className="w-full max-w-[490px]">
-                    <SudokuBoard
-                      state={gameState}
-                      onSelectCell={selectCell}
-                      isSpectating={isSpectating}
-                      isDarkMode={isDarkMode}
-                      waveAnimation={waveAnimation}
-                      shakeAnimation={shakeAnimation}
-                    />
-                  </div>
+              <div className="hidden md:flex flex-row items-start justify-center gap-3 lg:gap-5 w-full mt-2 px-1">
+                {/* Left Column: Board */}
+                <div className="w-full max-w-[460px] lg:max-w-[500px] shrink-0">
+                  <SudokuBoard
+                    state={gameState}
+                    onSelectCell={selectCell}
+                    isSpectating={isSpectating}
+                    isDarkMode={isDarkMode}
+                    waveAnimation={waveAnimation}
+                    shakeAnimation={shakeAnimation}
+                  />
                 </div>
 
-                {/* Right Column: Toolbar + 3x3 Number Grid (flex 4, max 290px) */}
-                <div className="flex-[4] max-w-[290px] flex flex-col pt-2">
+                {/* Right Column: Toolbar + 3x3 Number Grid */}
+                <div className="w-[230px] lg:w-[260px] shrink-0 flex flex-col pt-1.5">
                   <NumberPad
                     remainingCounts={remainingCounts}
                     isNotesMode={isNotesMode}
@@ -801,6 +999,23 @@ export default function SudokuApp() {
                     showToolbar={true}
                     toolbarOrder="undo-erase-pencil"
                   />
+
+                  {/* Flutter Quick Reactions Bar below numpad (Multiplayer only) */}
+                  {mode === "multiplayer_game" && (
+                    <div className="flex items-center justify-between gap-1 w-full mt-3 px-0.5">
+                      {QUICK_REACTION_EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => handleSendEmoji(emoji)}
+                          className="flex-1 h-9.5 rounded-[14px] flex items-center justify-center text-lg sm:text-xl transition-all duration-150 bg-black/[0.04] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.14] hover:scale-110 active:scale-95 cursor-pointer select-none"
+                          title={`React ${emoji}`}
+                        >
+                          <span className="leading-none">{emoji}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -833,6 +1048,23 @@ export default function SudokuApp() {
                     showToolbar={true}
                     toolbarOrder="undo-pencil-erase"
                   />
+
+                  {/* Flutter Quick Reactions Bar below numpad (Multiplayer only) */}
+                  {mode === "multiplayer_game" && (
+                    <div className="flex items-center justify-center gap-2 w-full max-w-[340px] mx-auto mt-2.5 px-1">
+                      {QUICK_REACTION_EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => handleSendEmoji(emoji)}
+                          className="w-10 h-10 rounded-[14px] flex items-center justify-center text-xl transition-all duration-150 bg-black/[0.04] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.14] hover:scale-110 active:scale-95 cursor-pointer select-none"
+                          title={`React ${emoji}`}
+                        >
+                          <span className="leading-none">{emoji}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

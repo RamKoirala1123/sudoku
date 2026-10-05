@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { soundService } from "@/lib/sound/soundService";
 
 interface CountdownOverlayProps {
@@ -13,6 +13,11 @@ export const CountdownOverlay: React.FC<CountdownOverlayProps> = ({
   onComplete,
 }) => {
   const [count, setCount] = useState<number>(initialCount);
+  const onCompleteRef = useRef(onComplete);
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   useEffect(() => {
     soundService.playTap();
@@ -21,7 +26,9 @@ export const CountdownOverlay: React.FC<CountdownOverlayProps> = ({
         if (prev <= 1) {
           clearInterval(interval);
           soundService.playSuccess();
-          setTimeout(onComplete, 600);
+          setTimeout(() => {
+            onCompleteRef.current();
+          }, 600);
           return 0; // 0 = "GO!"
         }
         soundService.playTap();
@@ -30,7 +37,7 @@ export const CountdownOverlay: React.FC<CountdownOverlayProps> = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [onComplete]);
+  }, []);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md animate-fadeIn">

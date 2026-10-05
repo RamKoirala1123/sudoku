@@ -11,7 +11,7 @@ interface RaceLeaderboardProps {
   latencyMs?: number;
 }
 
-const EMOJI_LIST = ["🔥", "🚀", "😎", "👏", "😱", "😭", "🤯", "💀"];
+const EMOJI_LIST = ["🔥", "👏", "🤯", "😎", "😱", "💀"];
 
 export const RaceLeaderboard: React.FC<RaceLeaderboardProps> = ({
   players,
@@ -74,13 +74,12 @@ export const RaceLeaderboard: React.FC<RaceLeaderboardProps> = ({
             {latencyMs !== undefined && (
               <div className="flex items-center gap-0.5 text-[10px] font-mono text-[#1E2233]/60 dark:text-[#F3F4FA]/60 ml-1">
                 <Wifi
-                  className={`w-3 h-3 ${
-                    latencyMs < 80
-                      ? "text-[#3DDC97]"
-                      : latencyMs < 180
+                  className={`w-3 h-3 ${latencyMs < 80
+                    ? "text-[#3DDC97]"
+                    : latencyMs < 180
                       ? "text-[#FFC24B]"
                       : "text-[#FF5D6C]"
-                  }`}
+                    }`}
                 />
                 <span>{latencyMs}ms</span>
               </div>
@@ -109,11 +108,10 @@ export const RaceLeaderboard: React.FC<RaceLeaderboardProps> = ({
             return (
               <div
                 key={p.id}
-                className={`p-2 rounded-[12px] transition-all ${
-                  isMe
-                    ? "bg-white dark:bg-[#1B1E29] shadow-xs border border-[#5B6CFF]/30 dark:border-[#7C8CFF]/30"
-                    : "bg-white/60 dark:bg-[#1B1E29]/60 border border-black/[0.04] dark:border-white/[0.04]"
-                }`}
+                className={`p-2 rounded-[12px] transition-all ${isMe
+                  ? "bg-white dark:bg-[#1B1E29] shadow-xs border border-[#5B6CFF]/30 dark:border-[#7C8CFF]/30"
+                  : "bg-white/60 dark:bg-[#1B1E29]/60 border border-black/[0.04] dark:border-white/[0.04]"
+                  }`}
               >
                 {/* Row info */}
                 <div className="flex items-center justify-between text-xs mb-1">

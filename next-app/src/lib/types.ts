@@ -115,6 +115,9 @@ export interface PlayerProgress {
   recentEmoji?: string;
   latencyMs: number;
   rank: number;
+  timeFormatted?: string;
+  accuracyPercent?: number;
+  cellsPerMinute?: number;
 }
 
 export interface SavedGameSession {

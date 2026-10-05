@@ -22,15 +22,15 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = ({
   shakeAnimation,
 }) => {
   const { board, puzzle, selectedCell, candidates, incorrectCells } = state;
-  const [hasPlayedInitialSound, setHasPlayedInitialSound] = useState(false);
+  const hasPlayedInitialSoundRef = useRef(false);
 
   // Play board placing sound once on board mount
   useEffect(() => {
-    if (!hasPlayedInitialSound && puzzle) {
+    if (!hasPlayedInitialSoundRef.current && puzzle) {
       soundService.playBoardPlacing();
-      setHasPlayedInitialSound(true);
+      hasPlayedInitialSoundRef.current = true;
     }
-  }, [puzzle, hasPlayedInitialSound]);
+  }, [puzzle]);
 
   // Flowing wave animation state (row / column / box completion or error conflict pulse)
   const lastWaveIdRef = useRef<number | null>(null);
@@ -204,7 +204,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = ({
   }
 
   return (
-    <div className="w-full max-w-[490px] mx-auto select-none aspect-square p-2">
+    <div className="w-full max-w-[490px] md:max-w-[510px] lg:max-w-[530px] mx-auto select-none aspect-square p-2">
       <div
         className="w-full h-full grid grid-cols-9 grid-rows-9 rounded-[12px] overflow-hidden transition-colors shadow-[0_8px_18px_rgba(0,0,0,0.08)] border-[2.5px]"
         style={{
@@ -311,7 +311,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = ({
               {val !== 0 ? (
                 /* Regular 400 weight Sudoku font matching Flutter Text */
                 <span
-                  className="text-xl sm:text-[25px] md:text-[27px] leading-none select-none transition-colors"
+                  className="text-xl sm:text-[25px] md:text-[27px] lg:text-[29px] leading-none select-none transition-colors"
                   style={{
                     color: cellTextColor,
                     fontWeight: 400,
@@ -371,7 +371,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = ({
                             borderRadius: "9999px",
                             transition: "all 120ms ease-out",
                           }}
-                          className="w-full h-full flex items-center justify-center text-[9px] sm:text-[10px] leading-none select-none"
+                          className="w-full h-full flex items-center justify-center text-[9px] sm:text-[10px] md:text-[11px] lg:text-[12px] leading-none select-none"
                         >
                           {num}
                         </span>

@@ -12,12 +12,12 @@ export class SignalingService {
   private readonly _brokers = [
     'wss://broker.emqx.io:8084/mqtt',
     'wss://broker.hivemq.com:8884/mqtt',
-    'wss://broker.hivemq.com:8000/mqtt',
   ];
 
   constructor(roomCode: string, clientId?: string) {
     this.roomCode = roomCode;
-    this.clientId = clientId ?? `next_${Date.now()}_${Math.floor(Math.random() * 9999)}`;
+    // Keep client ID <= 23 bytes for strict MQTT 3.1.1 compliance
+    this.clientId = clientId ?? `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
   }
 
   private get _topic(): string {
@@ -46,21 +46,32 @@ export class SignalingService {
 
   private _connectToBroker(brokerUrl: string): Promise<boolean> {
     return new Promise((resolve) => {
-      try {
-        const ws = new WebSocket(brokerUrl, ['mqtt']);
-        ws.binaryType = 'arraybuffer';
-        this._socket = ws;
+      let resolved = false;
+      let ws: WebSocket | null = null;
 
-        const timeout = setTimeout(() => {
-          if (!this._isConnected) {
+      const finish = (result: boolean) => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          if (!result && ws) {
             try { ws.close(); } catch {}
-            resolve(false);
           }
-        }, 5000);
+          resolve(result);
+        }
+      };
 
+      const timeout = setTimeout(() => {
+        finish(false);
+      }, 6000);
+
+      try {
+        ws = new WebSocket(brokerUrl, ['mqtt']);
+        ws.binaryType = 'arraybuffer';
 
         ws.onopen = () => {
-          ws.send(this._buildConnectPacket(this.clientId));
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(this._buildConnectPacket(this.clientId));
+          }
         };
 
         ws.onmessage = (event) => {
@@ -70,11 +81,23 @@ export class SignalingService {
 
           // CONNACK (0x20)
           if (headerType === 0x20) {
-            this._isConnected = true;
-            clearTimeout(timeout);
-            ws.send(this._buildSubscribePacket(this._packetId++, this._topic));
-            this._startKeepAlive();
-            resolve(true);
+            const returnCode = bytes.length >= 4 ? bytes[3] : 0;
+            if (returnCode === 0) {
+              this._socket = ws;
+              this._isConnected = true;
+              ws?.send(this._buildSubscribePacket(this._packetId++, this._topic));
+              this._startKeepAlive();
+              // In case SUBACK is delayed, resolve after 800ms
+              setTimeout(() => {
+                if (this._isConnected) finish(true);
+              }, 800);
+            } else {
+              console.warn(`[Signaling] Broker rejected MQTT connection with code: ${returnCode}`);
+              finish(false);
+            }
+          } else if (headerType === 0x90) {
+            // SUBACK (0x90) - Confirmed subscribed to room topic!
+            finish(true);
           } else if (headerType === 0x30) {
             // PUBLISH
             this._handleIncomingPublish(bytes);
@@ -82,15 +105,17 @@ export class SignalingService {
         };
 
         ws.onerror = () => {
-          this._isConnected = false;
-          resolve(false);
+          finish(false);
         };
 
         ws.onclose = () => {
-          this._isConnected = false;
+          if (this._socket === ws) {
+            this._isConnected = false;
+          }
+          finish(false);
         };
       } catch {
-        resolve(false);
+        finish(false);
       }
     });
   }

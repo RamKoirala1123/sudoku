@@ -9,7 +9,6 @@ import {
   SudokuGameState,
   SudokuPuzzle,
   WaveAnimationData,
-  ShakeAnimationData,
 } from '../types';
 import { SudokuGenerator } from './engine';
 import { soundService } from '../sound/soundService';
@@ -137,7 +136,7 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
           }
         };
 
-        worker.onerror = (err) => {
+        worker.onerror = () => {
           clearTimeout(timeout);
           worker.terminate();
           // Fallback on error
@@ -167,7 +166,7 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
 
     setIsGenerating(true);
     // Reset state immediately to show loading
-    setState((prev) => ({
+    setState(() => ({
       ...INITIAL_STATE,
       puzzle: null,
       board: new Array(81).fill(0),
@@ -492,7 +491,6 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
       const prev = current.board[selected];
       if (prev === 0 && !current.candidates[selected]) return current;
 
-      soundService.playPlace();
       const newBoard = [...current.board];
       newBoard[selected] = 0;
 

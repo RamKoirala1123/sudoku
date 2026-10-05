@@ -771,7 +771,7 @@ class _MultiplayerRoomGameScreenState extends State<MultiplayerRoomGameScreen> {
   }
 
   Widget _buildQuickReactionsBar() {
-    final emojis = ['🔥', '👏', '⚡', '🤯', '😎', '🎯'];
+    final emojis = ["🔥", "👏", "🤯", "😎", "😱", "💀"];
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,

@@ -1,7 +1,6 @@
 @import "tailwindcss";
 
-@variant dark (&:where(.dark, .dark *));
-@variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+@custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
 
 :root {
   --background: #F6F7FB;
@@ -17,7 +16,8 @@
   --heart-empty: #DADFEA;
 }
 
-.dark {
+.dark,
+[data-theme="dark"] {
   --background: #11131A;
   --foreground: #F3F4FA;
   --surface: #1B1E29;
@@ -217,4 +217,28 @@ body {
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* ========================================================================= */
+/* RESPONSIVE DISPLAY SCALING FOR LAPTOPS & DESKTOPS                         */
+/* Scales the entire UI to a comfortable 120%-128% size on laptop/desktop   */
+/* viewports (e.g. 15.6" 1080p laptop displays) while maintaining 100%       */
+/* natural mobile scale on phones and tablets (< 1024px).                    */
+/* ========================================================================= */
+@media screen and (min-width: 1024px) and (min-height: 600px) {
+  html {
+    zoom: 1.18;
+  }
+}
+
+@media screen and (min-width: 1280px) and (min-height: 680px) {
+  html {
+    zoom: 1.25;
+  }
+}
+
+@media screen and (min-width: 1536px) and (min-height: 720px) {
+  html {
+    zoom: 1.28;
+  }
 }
