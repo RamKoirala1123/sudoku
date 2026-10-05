@@ -89,6 +89,7 @@ export default function SudokuApp() {
   // Sudoku Hook
   const {
     gameState,
+    isGenerating,
     selectedCell,
     isNotesMode,
     startNewGame,
@@ -695,7 +696,7 @@ export default function SudokuApp() {
       {/* ========================================================================= */}
       {(mode === "solo_game" || mode === "multiplayer_game") && (
         <div className="w-full flex flex-col items-center animate-fadeIn max-w-[500px] md:max-w-[920px] mx-auto">
-          {/* Top Bar (Difficulty, Controls, Pause) */}
+          {/* Top Bar (Difficulty, Controls, Pause) — matches Flutter exact layout */}
           <TopBar
             difficulty={difficulty}
             mistakeRule={mistakeRule}
@@ -709,13 +710,13 @@ export default function SudokuApp() {
             isDarkMode={isDarkMode}
             onToggleTheme={handleToggleTheme}
             onBack={handleBackHome}
-            onPause={mode === "solo_game" && gameState.status === "playing" ? handleOpenPause : undefined}
-            className="w-full max-w-[490px] md:max-w-[920px] mx-auto px-2 pt-2 pb-1 select-none"
+            onPause={mode === "solo_game" && gameState.status === "playing" && !isGenerating ? handleOpenPause : undefined}
+            className="w-full px-2 pt-2 pb-1 select-none"
           />
 
           {/* Spectating Banner */}
           {isSpectating && (
-            <div className="w-full max-w-[490px] md:max-w-[920px] mx-auto px-2 mt-2">
+            <div className="w-full px-2 mt-2">
               <div className="p-3 rounded-[12px] bg-[#FF5D6C]/10 border border-[#FF5D6C]/30 text-[#FF5D6C] text-xs font-bold flex items-center justify-between">
                 <span>Spectating Match (Knocked Out by Mistakes)</span>
                 <button
@@ -729,78 +730,96 @@ export default function SudokuApp() {
             </div>
           )}
 
-          {/* Flutter Widescreen 2-column layout (>= 768px) */}
-          <div className="hidden md:flex flex-row items-start justify-center gap-6 w-full max-w-[920px] mt-4 px-2">
-            {/* Left Column: Board (flex 6, max 490px) */}
-            <div className="flex-[6] flex justify-center">
-              <div className="w-full max-w-[490px]">
-                <SudokuBoard
-                  state={gameState}
-                  onSelectCell={selectCell}
-                  isSpectating={isSpectating}
-                  isDarkMode={isDarkMode}
-                />
+          {/* Flutter loading indicator (CircularProgressIndicator equivalent) */}
+          {isGenerating && (
+            <div className="flex flex-col items-center justify-center h-64 gap-4">
+              <div
+                className="w-12 h-12 rounded-full border-4 border-t-transparent animate-spin"
+                style={{ borderColor: isDarkMode ? "rgba(124,140,255,0.3)" : "rgba(91,108,255,0.3)", borderTopColor: "transparent" }}
+              />
+              <span className="text-sm font-medium" style={{ color: isDarkMode ? "rgba(243,244,250,0.6)" : "rgba(30,34,51,0.6)" }}>
+                Generating puzzle...
+              </span>
+            </div>
+          )}
+
+          {/* Game board & controls — hidden while generating */}
+          {!isGenerating && (
+            <>
+              {/* Flutter Widescreen 2-column layout (>= 768px): Board LEFT, Controls RIGHT */}
+              <div className="hidden md:flex flex-row items-start justify-center gap-6 w-full mt-4 px-2">
+                {/* Left Column: Board (flex 6, max 490px) */}
+                <div className="flex-[6] flex justify-center">
+                  <div className="w-full max-w-[490px]">
+                    <SudokuBoard
+                      state={gameState}
+                      onSelectCell={selectCell}
+                      isSpectating={isSpectating}
+                      isDarkMode={isDarkMode}
+                    />
+                  </div>
+                </div>
+
+                {/* Right Column: Toolbar + 3x3 Number Grid (flex 4, max 290px) */}
+                <div className="flex-[4] max-w-[290px] flex flex-col pt-2">
+                  <NumberPad
+                    remainingCounts={remainingCounts}
+                    isNotesMode={isNotesMode}
+                    onToggleNotes={toggleNotesMode}
+                    onInputNumber={inputNumber}
+                    onErase={eraseCell}
+                    onUndo={undo}
+                    disabled={gameState.status !== "playing" || isSpectating}
+                    isGrid={true}
+                    isDarkMode={isDarkMode}
+                    showToolbar={true}
+                    toolbarOrder="undo-erase-pencil"
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* Right Column: Controls + 3x3 Grid (flex 4, max 290px) */}
-            <div className="flex-[4] max-w-[290px] flex flex-col pt-1">
-              <NumberPad
-                remainingCounts={remainingCounts}
-                isNotesMode={isNotesMode}
-                onToggleNotes={toggleNotesMode}
-                onInputNumber={inputNumber}
-                onErase={eraseCell}
-                onUndo={undo}
-                disabled={gameState.status !== "playing" || isSpectating}
-                isGrid={true}
-                isDarkMode={isDarkMode}
-                showToolbar={true}
-                toolbarOrder="undo-erase-pencil"
-              />
-            </div>
-          </div>
+              {/* Flutter Mobile layout (< 768px): Board top, toolbar + 1-row pad below */}
+              <div className="flex md:hidden flex-col items-center w-full max-w-[500px]">
+                {/* Board (max 480px) */}
+                <div className="w-full max-w-[480px]">
+                  <SudokuBoard
+                    state={gameState}
+                    onSelectCell={selectCell}
+                    isSpectating={isSpectating}
+                    isDarkMode={isDarkMode}
+                  />
+                </div>
 
-          {/* Flutter Mobile layout (< 768px) */}
-          <div className="flex md:hidden flex-col items-center w-full max-w-[500px]">
-            {/* Board (max 480px) */}
-            <div className="w-full max-w-[480px]">
-              <SudokuBoard
-                state={gameState}
-                onSelectCell={selectCell}
-                isSpectating={isSpectating}
-                isDarkMode={isDarkMode}
-              />
-            </div>
+                {/* Mobile Toolbar + 1-row NumberPad */}
+                <div className="w-full max-w-[480px] mt-2 px-2">
+                  <NumberPad
+                    remainingCounts={remainingCounts}
+                    isNotesMode={isNotesMode}
+                    onToggleNotes={toggleNotesMode}
+                    onInputNumber={inputNumber}
+                    onErase={eraseCell}
+                    onUndo={undo}
+                    disabled={gameState.status !== "playing" || isSpectating}
+                    isGrid={false}
+                    isDarkMode={isDarkMode}
+                    showToolbar={true}
+                    toolbarOrder="undo-pencil-erase"
+                  />
+                </div>
+              </div>
 
-            {/* Mobile Toolbar + 1-row NumberPad */}
-            <div className="w-full max-w-[480px] mt-2">
-              <NumberPad
-                remainingCounts={remainingCounts}
-                isNotesMode={isNotesMode}
-                onToggleNotes={toggleNotesMode}
-                onInputNumber={inputNumber}
-                onErase={eraseCell}
-                onUndo={undo}
-                disabled={gameState.status !== "playing" || isSpectating}
-                isGrid={false}
-                isDarkMode={isDarkMode}
-                showToolbar={true}
-                toolbarOrder="undo-pencil-erase"
-              />
-            </div>
-          </div>
-
-          {/* Multiplayer Race Progress Leaderboard at bottom */}
-          {mode === "multiplayer_game" && (
-            <div className="w-full max-w-[500px] md:max-w-[920px] mx-auto mt-4 px-2">
-              <RaceLeaderboard
-                players={players}
-                myId={roomService.getMyPeerId()}
-                onSendEmoji={handleSendEmoji}
-                latencyMs={latencyMs}
-              />
-            </div>
+              {/* Multiplayer Race Progress Leaderboard at bottom */}
+              {mode === "multiplayer_game" && (
+                <div className="w-full mt-4 px-2">
+                  <RaceLeaderboard
+                    players={players}
+                    myId={roomService.getMyPeerId()}
+                    onSendEmoji={handleSendEmoji}
+                    latencyMs={latencyMs}
+                  />
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

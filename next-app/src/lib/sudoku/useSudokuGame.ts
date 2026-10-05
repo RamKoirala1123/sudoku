@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import confetti from 'canvas-confetti';
 import {
   Difficulty,
-  GameStatus,
   MistakeRule,
   MoveRecord,
   SudokuGameState,
@@ -13,32 +12,42 @@ import {
 import { SudokuGenerator } from './engine';
 import { soundService } from '../sound/soundService';
 
+function makeLives(rule: MistakeRule): number {
+  return rule === 'hardcore' ? 1 : rule === 'casual' ? 999 : 3;
+}
+
+const INITIAL_STATE: SudokuGameState = {
+  puzzle: null,
+  board: new Array(81).fill(0),
+  selectedCell: null,
+  candidates: {},
+  incorrectCells: [],
+  status: 'playing',
+  score: 0,
+  wrongCount: 0,
+  correctCount: 0,
+  lives: 3,
+  elapsedSeconds: 0,
+  difficulty: 'medium',
+  mistakeRule: 'standard',
+};
+
 export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialRule: MistakeRule = 'standard') {
   const [state, setState] = useState<SudokuGameState>({
-    puzzle: null,
-    board: new Array(81).fill(0),
-    selectedCell: null,
-    candidates: {},
-    incorrectCells: [],
-    status: 'playing',
-    score: 0,
-    wrongCount: 0,
-    correctCount: 0,
-    lives: initialRule === 'hardcore' ? 1 : initialRule === 'casual' ? 999 : 3,
-    elapsedSeconds: 0,
+    ...INITIAL_STATE,
+    lives: makeLives(initialRule),
     difficulty: initialDifficulty,
     mistakeRule: initialRule,
   });
-
+  const [isGenerating, setIsGenerating] = useState(false);
   const [pencilMode, setPencilMode] = useState(false);
   const [lastDelta, setLastDelta] = useState<number | null>(null);
   const moveHistoryRef = useRef<MoveRecord[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-
-  // Timer ticker
+  // Timer ticker — only runs when status === 'playing'
   useEffect(() => {
-    if (state.status === 'playing') {
+    if (state.status === 'playing' && state.puzzle) {
       timerRef.current = setInterval(() => {
         setState((s) => ({ ...s, elapsedSeconds: s.elapsedSeconds + 1 }));
       }, 1000);
@@ -48,32 +57,132 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [state.status]);
+  }, [state.status, state.puzzle]);
+
+  /**
+   * Generates a puzzle asynchronously using a Web Worker to avoid blocking the UI.
+   * Falls back to synchronous generation if workers are unavailable.
+   */
+  const generateAsync = useCallback((difficulty: Difficulty): Promise<SudokuPuzzle> => {
+    return new Promise((resolve, reject) => {
+      if (typeof Worker === 'undefined') {
+        // Fallback: synchronous (may block briefly)
+        try {
+          const puzzle = SudokuGenerator.generate(difficulty);
+          resolve(puzzle);
+        } catch (e) {
+          reject(e);
+        }
+        return;
+      }
+
+      try {
+        const worker = new Worker(
+          new URL('./sudokuWorker.ts', import.meta.url),
+          { type: 'module' }
+        );
+        const requestId = Math.random().toString(36).slice(2);
+        const timeout = setTimeout(() => {
+          worker.terminate();
+          // Fallback to sync if worker times out
+          try {
+            resolve(SudokuGenerator.generate(difficulty));
+          } catch (e) {
+            reject(e);
+          }
+        }, 8000);
+
+        worker.onmessage = (e) => {
+          if (e.data.requestId !== requestId) return;
+          clearTimeout(timeout);
+          worker.terminate();
+          if (e.data.type === 'success') {
+            resolve(e.data.puzzle as SudokuPuzzle);
+          } else {
+            reject(new Error(e.data.error));
+          }
+        };
+
+        worker.onerror = (err) => {
+          clearTimeout(timeout);
+          worker.terminate();
+          // Fallback on error
+          try {
+            resolve(SudokuGenerator.generate(difficulty));
+          } catch (e) {
+            reject(e);
+          }
+        };
+
+        worker.postMessage({ difficulty, requestId });
+      } catch {
+        // Worker creation failed — synchronous fallback
+        try {
+          resolve(SudokuGenerator.generate(difficulty));
+        } catch (e) {
+          reject(e);
+        }
+      }
+    });
+  }, []);
 
   const startNewGame = useCallback((difficulty?: Difficulty, rule?: MistakeRule) => {
     const diff = difficulty ?? state.difficulty;
     const mRule = rule ?? state.mistakeRule;
-    const p = SudokuGenerator.generate(diff);
     moveHistoryRef.current = [];
 
-    const givensCount = p.givens.filter((v) => v !== 0).length;
-
-    setState({
-      puzzle: p,
-      board: [...p.givens],
-      selectedCell: null,
-      candidates: {},
-      incorrectCells: [],
+    setIsGenerating(true);
+    // Reset state immediately to show loading
+    setState((prev) => ({
+      ...INITIAL_STATE,
+      puzzle: null,
+      board: new Array(81).fill(0),
       status: 'playing',
-      score: 0,
-      wrongCount: 0,
-      correctCount: givensCount,
-      lives: mRule === 'hardcore' ? 1 : mRule === 'casual' ? 999 : 3,
-      elapsedSeconds: 0,
+      lives: makeLives(mRule),
       difficulty: diff,
       mistakeRule: mRule,
+    }));
+
+    generateAsync(diff).then((p) => {
+      const givensCount = p.givens.filter((v) => v !== 0).length;
+      setState({
+        puzzle: p,
+        board: [...p.givens],
+        selectedCell: null,
+        candidates: {},
+        incorrectCells: [],
+        status: 'playing',
+        score: 0,
+        wrongCount: 0,
+        correctCount: givensCount,
+        lives: makeLives(mRule),
+        elapsedSeconds: 0,
+        difficulty: diff,
+        mistakeRule: mRule,
+      });
+    }).catch(() => {
+      // Emergency synchronous fallback
+      const p = SudokuGenerator.generate(diff);
+      const givensCount = p.givens.filter((v) => v !== 0).length;
+      setState({
+        puzzle: p,
+        board: [...p.givens],
+        selectedCell: null,
+        candidates: {},
+        incorrectCells: [],
+        status: 'playing',
+        score: 0,
+        wrongCount: 0,
+        correctCount: givensCount,
+        lives: makeLives(mRule),
+        elapsedSeconds: 0,
+        difficulty: diff,
+        mistakeRule: mRule,
+      });
+    }).finally(() => {
+      setIsGenerating(false);
     });
-  }, [state.difficulty, state.mistakeRule]);
+  }, [state.difficulty, state.mistakeRule, generateAsync]);
 
   const startWithPuzzle = useCallback((puzzle: SudokuPuzzle, rule?: MistakeRule) => {
     const mRule = rule ?? state.mistakeRule;
@@ -90,7 +199,7 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
       score: 0,
       wrongCount: 0,
       correctCount: givensCount,
-      lives: mRule === 'hardcore' ? 1 : mRule === 'casual' ? 999 : 3,
+      lives: makeLives(mRule),
       elapsedSeconds: 0,
       difficulty: puzzle.difficulty,
       mistakeRule: mRule,
@@ -116,9 +225,6 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
       // Already correctly filled cells are locked
       if (current.board[selected] === puzzle.solution[selected]) return current;
 
-      // If tapping same value, do nothing
-      if (current.board[selected] === val && !pencilMode) return current;
-
       // ----------------------------------------------------
       // PENCIL / NOTE MODE
       // ----------------------------------------------------
@@ -140,7 +246,8 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
       }
 
       // ----------------------------------------------------
-      // DIRECT NUMBER PLACEMENT / REPLACEMENT
+      // DIRECT NUMBER PLACEMENT (replaces any existing wrong answer)
+      // Flutter allows replacing incorrect numbers directly
       // ----------------------------------------------------
       const isCorrect = puzzle.solution[selected] === val;
       const prevVal = current.board[selected];
@@ -166,7 +273,7 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
         soundService.playSuccess();
         setLastDelta(50);
 
-        // AUTO-CLEAR NOTES: erase this number from peers in same row, column, and 3x3 box
+        // AUTO-CLEAR NOTES: erase this number from peers in same row, col, 3x3 box
         const row = Math.floor(selected / 9);
         const col = selected % 9;
         const boxRow = Math.floor(row / 3) * 3;
@@ -238,7 +345,6 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
         let newElapsed = current.elapsedSeconds;
 
         if (current.mistakeRule === 'casual') {
-          // Unlimited mistakes with +30s time penalty
           newElapsed += 30;
         } else {
           newLives -= 1;
@@ -271,7 +377,6 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
       const puzzle = current.puzzle;
       if (!puzzle) return current;
 
-      // Cannot erase givens or correct solution cells
       if (puzzle.givens[selected] !== 0) return current;
       if (current.board[selected] === puzzle.solution[selected]) return current;
 
@@ -357,6 +462,7 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
       maxMistakes,
       mistakes: state.wrongCount,
     },
+    isGenerating,
     selectedCell: state.selectedCell,
     isNotesMode: pencilMode,
     pencilMode,
@@ -386,4 +492,3 @@ export function useSudokuGame(initialDifficulty: Difficulty = 'medium', initialR
     maxMistakes,
   };
 }
-

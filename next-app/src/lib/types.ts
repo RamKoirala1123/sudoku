@@ -34,15 +34,18 @@ export interface DifficultyInfo {
   id: Difficulty;
   label: string;
   givensCount: number;
+  maxRemovalAttempts: number;
 }
 
+// Matches Flutter's Difficulty enum: targetGivens and maxRemovalAttempts
+// @see lib/features/sudoku/domain/entities/difficulty.dart
 export const DIFFICULTIES: Record<Difficulty, DifficultyInfo> = {
-  easy: { id: 'easy', label: 'Easy', givensCount: 38 },
-  medium: { id: 'medium', label: 'Medium', givensCount: 32 },
-  hard: { id: 'hard', label: 'Hard', givensCount: 28 },
-  expert: { id: 'expert', label: 'Expert', givensCount: 24 },
-  difficult: { id: 'difficult', label: 'Difficult', givensCount: 24 },
-  extreme: { id: 'extreme', label: 'Extreme', givensCount: 22 },
+  easy:      { id: 'easy',      label: 'Easy',      givensCount: 42, maxRemovalAttempts: 120 },
+  medium:    { id: 'medium',    label: 'Medium',    givensCount: 36, maxRemovalAttempts: 200 },
+  hard:      { id: 'hard',      label: 'Hard',      givensCount: 30, maxRemovalAttempts: 320 },
+  expert:    { id: 'expert',    label: 'Expert',    givensCount: 26, maxRemovalAttempts: 450 },
+  difficult: { id: 'difficult', label: 'Difficult', givensCount: 26, maxRemovalAttempts: 450 },
+  extreme:   { id: 'extreme',   label: 'Extreme',   givensCount: 22, maxRemovalAttempts: 650 },
 };
 
 export interface SudokuPuzzle {

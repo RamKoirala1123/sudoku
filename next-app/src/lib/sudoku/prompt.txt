@@ -1,1 +1,1 @@
-the game creating logic isnot same as flutter it always filled 3 grid and keep rest. it should be same as flutter app also in flutter app on large screen the game grid is at left and the big numbed is on right.. also if i press any number in sudoku board it doesnot repsond please fix all of that and make the UI same as flutter app for game screen can you
+also in the flutter games, wheenevr the user completes the row or columns or grid animation occurse like flowing animation and also on error the number or cell which gives erorr shakes implement that here also
