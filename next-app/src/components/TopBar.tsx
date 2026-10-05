@@ -96,6 +96,7 @@ export const TopBar: React.FC<TopBarProps> = ({
 
           <button
             type="button"
+            suppressHydrationWarning
             onClick={onToggleTheme}
             className="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition cursor-pointer"
             style={{ color: textColor }}

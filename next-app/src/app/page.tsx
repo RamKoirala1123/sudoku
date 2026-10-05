@@ -53,15 +53,12 @@ interface PlayerStats {
 }
 
 export default function SudokuApp() {
-  // Appearance & Audio state - initialized from localStorage to persist across refresh
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("sudoku_theme");
-      if (saved) return saved === "dark";
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
-    }
-    return true;
-  });
+  // Stable server-side default (avoids hydration mismatch).
+  // The real theme is applied from localStorage after mount via useEffect.
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
+  // Tracks whether we're past first render so we don't show theme-sensitive
+  // content until the client has read localStorage.
+  const [mounted, setMounted] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
 
   // App navigation state
@@ -126,12 +123,15 @@ export default function SudokuApp() {
       const savedStatsStr = localStorage.getItem("sudoku_stats");
       const savedSessionStr = localStorage.getItem("sudoku_active_session");
 
+      // Resolve theme from localStorage / system preference now that we're on the client
       if (savedTheme) {
         setIsDarkMode(savedTheme === "dark");
       } else {
         const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
         setIsDarkMode(prefersDark);
       }
+      // Mark as mounted so theme-sensitive UI can render
+      setMounted(true);
 
       if (savedMute) {
         const muted = savedMute === "true";
@@ -432,6 +432,7 @@ export default function SudokuApp() {
 
   return (
     <main
+      suppressHydrationWarning
       data-theme={isDarkMode ? "dark" : "light"}
       className={`min-h-screen flex flex-col items-center justify-start pb-6 px-3 transition-colors ${isDarkMode ? "dark bg-[#11131A] text-[#F3F4FA]" : "bg-[#F6F7FB] text-[#1E2233]"
         }`}
@@ -559,11 +560,14 @@ export default function SudokuApp() {
               </button>
               <button
                 type="button"
+                suppressHydrationWarning
                 onClick={handleToggleTheme}
                 className="p-2.5 rounded-full text-[#1E2233] dark:text-[#F3F4FA] hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition"
-                title={isDarkMode ? "Light Mode" : "Dark Mode"}
+                title={mounted ? (isDarkMode ? "Light Mode" : "Dark Mode") : "Toggle Theme"}
               >
-                {isDarkMode ? (
+                {!mounted ? (
+                  <Moon className="w-[22px] h-[22px]" />
+                ) : isDarkMode ? (
                   <Sun className="w-[22px] h-[22px]" />
                 ) : (
                   <Moon className="w-[22px] h-[22px]" />
